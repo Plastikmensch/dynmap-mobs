@@ -80,6 +80,7 @@ hostile_mobs:
   stray: true
   vex: true
   vindicator: true
+  warden: true
   witch: true
   wither: true
   witherskeleton: true
@@ -89,6 +90,7 @@ hostile_mobs:
   zombievillager: true
 
 passive_mobs:
+  allay: true
   bat: true
   cat: true
   chicken: true
@@ -96,6 +98,7 @@ passive_mobs:
   cod: true
   cow: true
   donkey: true
+  frog: true
   golem: true
   llama: true
   mooshroom: true
@@ -112,6 +115,7 @@ passive_mobs:
   snowgolem: true
   squid: true
   strider: true
+  tadpole: true
   tamedcat: true
   tameddonkey: true
   tamedllama: true
@@ -147,6 +151,7 @@ vehicles:
   minecart: false
   # Boats
   boat: false
+  storage-boat: false
   
 mocreatlayer:
   name: "Mo'Creatures Mobs"

@@ -194,7 +194,8 @@ public class DynmapMobsPlugin extends JavaPlugin {
         new MobMapping("pillager", "org.bukkit.entity.Pillager", "Pillager"),
         new MobMapping("piglin", "org.bukkit.entity.Piglin", "Piglin"),
         new MobMapping("hoglin", "org.bukkit.entity.Hoglin", "Hoglin"),
-        new MobMapping("zoglin", "org.bukkit.entity.Zoglin", "Zoglin")
+        new MobMapping("zoglin", "org.bukkit.entity.Zoglin", "Zoglin"),
+        new MobMapping("warden", "org.bukkit.entity.Warden", "Warden")
     };
 
     private MobMapping config_passive_mobs[] = {
@@ -244,7 +245,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
         new MobMapping("strider", "org.bukkit.entity.Strider", "Strider"),
         new MobMapping("glowsquid", "org.bukkit.entity.GlowSquid", "Glow Squid"),
         new MobMapping("vanillagoat", "org.bukkit.entity.Goat", "Goat"),
-        new MobMapping("axolotl", "org.bukkit.entity.Axolotl", "Axolotl")
+        new MobMapping("axolotl", "org.bukkit.entity.Axolotl", "Axolotl"),
+        new MobMapping("allay", "org.bukkit.entity.Allay", "Allay"),
+        new MobMapping("frog", "org.bukkit.entity.Frog", "Frog"),
+        new MobMapping("tadpole", "org.bukkit.entity.Tadpole", "Tadpole")
     };
 
     private MobMapping config_vehicles[] = {
@@ -263,7 +267,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
             // Storage Minecart
             new MobMapping("storage-minecart", "org.bukkit.entity.minecart.StorageMinecart", "Storage Minecart"),
             // Boat
-            new MobMapping("boat", "org.bukkit.entity.Boat", "Boat")
+            new MobMapping("boat", "org.bukkit.entity.Boat", "Boat"),
+            // Storage Boat
+            new MobMapping("storage-boat", "org.bukkit.entity.ChestBoat", "Boat with Chest")
     };
         
     public static void info(String msg) {
