@@ -28,6 +28,7 @@ jobs:
       with:
         name: dynmap-mobs
         path: /home/runner/work/dynmap-mobs/dynmap-mobs/target/dynmap-mobs-*.jar
+
     - uses: "marvinpinto/action-automatic-releases@latest"
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
