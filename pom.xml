@@ -75,6 +75,8 @@
   </dependencies>
   <properties>
   	<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	  <revision>1.9</revision>
+	  <changelist></changelist>
   </properties>
-  <version>1.9</version>
+  <version>${revision}${changelist}</version>
 </project>
