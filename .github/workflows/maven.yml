@@ -23,10 +23,10 @@ jobs:
         distribution: 'temurin'
         cache: maven
     - name: Build with Maven
-      run: mvn package
+      run: mvn -Dchangelist=-dev package
     - uses: actions/upload-artifact@v3
       with:
-        name: dynmap-mobs
+        name: dynmap-mobs-dev
         path: /home/runner/work/dynmap-mobs/dynmap-mobs/target/dynmap-mobs-*.jar
     - uses: "marvinpinto/action-automatic-releases@latest"
       with:
