@@ -58,7 +58,7 @@
   	<dependency>
   		<groupId>org.spigotmc</groupId>
   		<artifactId>spigot-api</artifactId>
-  		<version>1.18.2-R0.1-SNAPSHOT</version>
+  		<version>1.19-R0.1-SNAPSHOT</version>
   	</dependency>
 <!-- bStats -->
     <dependency>
@@ -76,5 +76,5 @@
   <properties>
   	<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
-  <version>1.8</version>
+  <version>1.9</version>
 </project>
