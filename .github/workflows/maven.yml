@@ -7,12 +7,15 @@ on:
   pull_request:
     branches: [ master ]
     types: [ opened, reopened, synchronize, ready_for_review ]
+  push:
+    branches: [ master ]
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    # Don't run on drafts
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
 
     steps:
     - uses: actions/checkout@v2
@@ -29,6 +32,8 @@ jobs:
         name: dynmap-mobs-dev
         path: /home/runner/work/dynmap-mobs/dynmap-mobs/target/dynmap-mobs-*.jar
     - uses: "marvinpinto/action-automatic-releases@latest"
+      # Don't create dev release on PR
+      if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
       with:
         repo_token: "${{ secrets.GITHUB_TOKEN }}"
         automatic_release_tag: "latest"
