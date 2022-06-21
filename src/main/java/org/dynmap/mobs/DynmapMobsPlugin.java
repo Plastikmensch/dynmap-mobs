@@ -20,9 +20,14 @@ import org.dynmap.markers.MarkerSet;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.net.ssl.HttpsURLConnection;
 
 public class DynmapMobsPlugin extends JavaPlugin {
     private static Logger log;
@@ -46,6 +51,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
     boolean inc_coord;
     boolean vinc_coord;
     boolean stop;
+    boolean isdev;
     boolean reload = false;
     static String obcpackage;
     static String nmspackage;
@@ -986,6 +992,92 @@ public class DynmapMobsPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * Checks for updates on Github.
+     */
+    private class UpdateCheck implements Runnable {
+        private final String updateURL = "https://api.github.com/repos/Plastikmensch/dynmap-mobs/releases/latest";
+        private final String downloadURL = "https://github.com/Plastikmensch/dynmap-mobs/releases/latest";
+        /* Delay between update checks in server ticks. 25h by default. */
+        private final long delay = 1800000L;
+        /* ETag used for conditional requests */
+        private String etag = null;
+        /* Cached release tag */
+        private String cachedRelease = null;
+        
+        /**
+         * Compares release tag with plugin version
+         */
+        public void run() {
+            getVersion(version -> {
+                String curVersion = DynmapMobsPlugin.this.getDescription().getVersion();
+                cachedRelease = version;
+                    
+                if (isdev) {
+                    curVersion = curVersion.split("-")[0];
+                    //TODO: Implement check if >dev version
+                    if(curVersion.equals(version)) {
+                        info("There is a stable release of " + curVersion + " available");
+                        info("Get it at " + downloadURL);
+                    }
+                }
+                //TODO: replace with more sophisticated check
+                else if(!curVersion.equals(version)) {
+                    info("Version " + version + " is available. You are running " + curVersion);
+                    info("Get it at " + downloadURL);
+                }
+            });
+            getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, delay);
+        }
+
+        /**
+         * Parses the body of the GET request and looks for the release tag
+         * @param consumer Resolves to release tag
+         */
+        public void getVersion(final Consumer<String> consumer) {
+            getServer().getScheduler().runTaskAsynchronously(DynmapMobsPlugin.this, () -> {
+                /* Try getting response body */
+                try (InputStream inputStream = tryConnect().getInputStream(); Scanner scanner = new Scanner(inputStream)) {
+                    /* split input stream at ","s */
+                    scanner.useDelimiter(",");
+                    /* iterate over elements */
+                    while (scanner.hasNext()) {
+                        String key = scanner.next();
+                        if(key.contains("tag_name")) {
+                            /* get release tag */
+                            String tag = key.split(":")[1].replaceAll("\"", "");
+                            /* check that release tag has the correct format */
+                            if (tag.matches("v\\d+\\.\\d+(\\.\\d+)?")) {
+                                /* return release tag without leading v */
+                                consumer.accept(tag.substring(1));
+                                return;
+                            }
+                            else throw new Exception("Malformed release tag");
+                        }
+                    }
+                    /* if no release tag found, use cached release tag */
+                    consumer.accept(cachedRelease);
+                } catch (Exception e) {
+                    severe("Unable to check for updates: " + e.getMessage());
+                }
+            });
+        }
+        /**
+         * Connect to the github api
+         * @return The connection to the github api
+         * @throws IOException
+         */
+        public HttpsURLConnection tryConnect() throws IOException {
+            HttpsURLConnection connection = (HttpsURLConnection) new URL(updateURL).openConnection();
+
+            if (etag != null) {
+                connection.setRequestProperty("If-None-Match", etag);
+            }
+            connection.connect();
+            if (connection.getResponseCode() == HttpsURLConnection.HTTP_OK) etag = connection.getHeaderField("etag");
+            return connection;
+        }
+    }
 
 
     private int findNext(int idx, String mobid, MobMapping[] mobs) {
@@ -1025,7 +1117,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
         /* If enabled, activate */
         if(dynmap.isEnabled())
             activate();
-        
+
     }
 
     private static String getNMSPackage() {
@@ -1103,6 +1195,11 @@ public class DynmapMobsPlugin extends JavaPlugin {
         FileConfiguration cfg = getConfig();
         cfg.options().copyDefaults(true);   /* Load defaults, if needed */
         this.saveConfig();  /* Save updates, if needed */
+
+        /* Check if build is dev build */
+        this.isdev = this.getDescription().getVersion().contains("-");
+
+        if(isdev) info("You are using an unstable build. Use at your own risk");
         
         /* Now, check which mo'creatures mobs are enabled */
         Set<Class<Entity>> clsset = new HashSet<Class<Entity>>();
@@ -1390,7 +1487,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
             info("Layer for vehicles disabled");
         }
 
-        info("version 1.7 is activated");
+        /* Check for updates */
+        getServer().getScheduler().scheduleSyncDelayedTask(this, new UpdateCheck());
+
+        info("Activated");
     }
 
     public void onDisable() {
