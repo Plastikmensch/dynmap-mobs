@@ -516,7 +516,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 String label = null;
                 if(hostile_mobs[i].mobid.equals("spider")) {    /* Check for jockey */
                     if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
-                        i = findNext(i, "spiderjockey", hostile_mobs);    /* Make jockey */
+                        i = find("spiderjockey", hostile_mobs);    /* Make jockey */
                     }
                 }
 
@@ -662,13 +662,13 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 String label = null;
                 if(passive_mobs[i].mobid.equals("chicken")) {    /* Check for jockey */
                     if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
-                        i = findNext(i, "chickenjockey", passive_mobs);    /* Make jockey , passive_mobs*/
+                        i = find("chickenjockey", passive_mobs);    /* Make jockey , passive_mobs*/
                     }
                 }
                 else if(passive_mobs[i].mobid.equals("wolf")) { /* Check for tamed wolf */
                     Wolf wolf = (Wolf)le;
                     if(wolf.isTamed()) {
-                        i = findNext(i, "tamedwolf", passive_mobs);
+                        i = find("tamedwolf", passive_mobs);
                         AnimalTamer t = wolf.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "Wolf (" + ((OfflinePlayer)t).getName() + ")";
@@ -678,7 +678,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 else if(passive_mobs[i].mobid.equals("cat")) { /* Check for tamed cat */
                     Cat cat = (Cat)le;
                     if(cat.isTamed()) {
-                        i = findNext(i, "tamedcat", passive_mobs);
+                        i = find("tamedcat", passive_mobs);
                         AnimalTamer t = cat.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "Cat (" + ((OfflinePlayer)t).getName() + ")";
@@ -688,7 +688,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 else if(passive_mobs[i].mobid.equals("vanillahorse")) { /* Check for tamed horse */
                     Horse horse = (Horse)le;
                     if(horse.isTamed()) {
-                        i = findNext(i, "tamedvanillahorse", passive_mobs);
+                        i = find("tamedvanillahorse", passive_mobs);
                         AnimalTamer t = horse.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "Horse (" + ((OfflinePlayer)t).getName() + ")";
@@ -698,7 +698,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 else if(passive_mobs[i].mobid.equals("donkey")) { /* Check for tamed donkey */
                     Donkey donkey = (Donkey)le;
                     if(donkey.isTamed()) {
-                        i = findNext(i, "tameddonkey", passive_mobs);
+                        i = find("tameddonkey", passive_mobs);
                         AnimalTamer t = donkey.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "Donkey (" + ((OfflinePlayer)t).getName() + ")";
@@ -708,7 +708,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 else if(passive_mobs[i].mobid.equals("mule")) { /* Check for tamed mule */
                     Mule mule = (Mule)le;
                     if(mule.isTamed()) {
-                        i = findNext(i, "tamedmule", passive_mobs);
+                        i = find("tamedmule", passive_mobs);
                         AnimalTamer t = mule.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "Mule (" + ((OfflinePlayer)t).getName() + ")";
@@ -718,7 +718,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 else if(passive_mobs[i].mobid.equals("traderllama")) { /* Check for tamed traderllama */
                     TraderLlama traderllama = (TraderLlama)le;
                     if(traderllama.isTamed()) {
-                        i = findNext(i, "tamedtraderllama", passive_mobs);
+                        i = find("tamedtraderllama", passive_mobs);
                         AnimalTamer t = traderllama.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "TraderLlama (" + ((OfflinePlayer)t).getName() + ")";
@@ -728,7 +728,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 else if(passive_mobs[i].mobid.equals("llama")) { /* Check for tamed llama */
                     Llama llama = (Llama)le;
                     if(llama.isTamed()) {
-                        i = findNext(i, "tamedllama", passive_mobs);
+                        i = find("tamedllama", passive_mobs);
                         AnimalTamer t = llama.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "Llama (" + ((OfflinePlayer)t).getName() + ")";
@@ -738,7 +738,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 else if(passive_mobs[i].mobid.equals("parrot")) { /* Check for tamed parrot */
                     Parrot parrot = (Parrot)le;
                     if(parrot.isTamed()) {
-                        i = findNext(i, "tamedparrot", passive_mobs);
+                        i = find("tamedparrot", passive_mobs);
                         AnimalTamer t = parrot.getOwner();
                         if((t != null) && (t instanceof OfflinePlayer)) {
                             label = "Parrot (" + ((OfflinePlayer)t).getName() + ")";
@@ -1080,15 +1080,19 @@ public class DynmapMobsPlugin extends JavaPlugin {
         }
     }
 
-
-    private int findNext(int idx, String mobid, MobMapping[] mobs) {
-        idx++;
-        if ((idx < mobs.length) && mobs[idx].mobid.equals(mobid)) {
-            return idx;
+    /**
+     * Look for index of mobid in provided MobMapping.
+     * @param mobid ID to match
+     * @param mobs List of mobs
+     * @return Index of mobid, otherwise length 
+     */
+    private int find(String mobid, MobMapping[] mobs) {
+        int idx = 0;
+        while (idx < mobs.length) {
+            if(mobs[idx].mobid.equals(mobid)) return idx;
+            idx++;
         }
-        else {
-            return mobs.length;
-        }
+        return mobs.length;
     }
 
     private class OurServerListener implements Listener {
