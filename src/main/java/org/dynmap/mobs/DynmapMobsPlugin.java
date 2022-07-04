@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.net.URL;
-import java.net.URLConnection;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -94,12 +93,13 @@ public class DynmapMobsPlugin extends JavaPlugin {
         MobMapping(String id, String clsid, String lbl) {
             this(id, clsid, lbl, null);
         }
-        @SuppressWarnings("unchecked")
+
         MobMapping(String id, String clsid, String lbl, String entclsid) {
             mobid = id;
             label = lbl;
             cls_id = clsid;
         }
+        @SuppressWarnings("unchecked")
         public void init() {
             try {
                 mobclass = (Class<Entity>) Class.forName(mapClassName(cls_id));
@@ -515,7 +515,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
 
                 String label = null;
                 if(hostile_mobs[i].mobid.equals("spider")) {    /* Check for jockey */
-                    if(le.getPassenger() != null) { /* Has passenger? */
+                    if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
                         i = findNext(i, "spiderjockey", hostile_mobs);    /* Make jockey */
                     }
                 }
@@ -661,7 +661,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
 
                 String label = null;
                 if(passive_mobs[i].mobid.equals("chicken")) {    /* Check for jockey */
-                    if(le.getPassenger() != null) { /* Has passenger? */
+                    if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
                         i = findNext(i, "chickenjockey", passive_mobs);    /* Make jockey , passive_mobs*/
                     }
                 }
@@ -800,8 +800,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 }
                 else if(passive_mobs[i].mobid.equals("zombiehorse")
                 	 || passive_mobs[i].mobid.equals("skeletonhorse")) {    /* Check for rider */
-                    if(le.getPassenger() != null) { /* Has passenger? */
-                        Entity e = le.getPassenger();
+                    List<Entity> passengers = le.getPassengers();
+                    if(passengers != null && !passengers.isEmpty()) { /* Has passenger? */
+                        Entity e = passengers.get(0);
                         if (e instanceof Player) {
                             label = passive_mobs[i].label + " (" + ((Player)e).getName() + ")";
                         }
