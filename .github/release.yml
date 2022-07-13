@@ -1,6 +1,6 @@
 changelog:
   exclude:
-    - labels:
+    labels:
       - ignore-notes
   categories:
     - title: Bug Fixes
@@ -24,3 +24,6 @@ changelog:
     - title: Documentation
       labels:
         - docs
+    - title: 'Other Changes'
+      labels:
+        - "*"
