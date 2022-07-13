@@ -31,7 +31,8 @@ jobs:
       with:
         name: dynmap-mobs-dev
         path: /home/runner/work/dynmap-mobs/dynmap-mobs/target/dynmap-mobs-*.jar
-    - uses: "marvinpinto/action-automatic-releases@latest"
+    # Use fork supporting github changelog
+    - uses: "lauravuo/action-automatic-releases@test-changes"
       # Don't create dev release on PR
       if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
       with:
@@ -39,5 +40,6 @@ jobs:
         automatic_release_tag: "latest"
         title: "Development Build"
         prerelease: true
+        auto_generate_release_notes: true
         files: |
           target/*.jar
