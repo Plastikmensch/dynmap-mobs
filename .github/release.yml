@@ -1,0 +1,26 @@
+changelog:
+  exclude:
+    - labels:
+      - ignore-notes
+  categories:
+    - title: Bug Fixes
+      labels: 
+        - fix
+    - title: Continuous Integration
+      labels:
+        - ci
+    - title: Features
+      labels:
+        - feature
+    - title: Chores
+      labels:
+        - chore
+    - title: Code Refactoring
+      labels:
+        - refactor
+    - title: Styles
+      labels:
+        - style
+    - title: Documentation
+      labels:
+        - docs
