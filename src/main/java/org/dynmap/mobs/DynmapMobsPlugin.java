@@ -12,10 +12,8 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.dynmap.DynmapAPI;
+import org.dynmap.markers.*;
 import org.dynmap.markers.Marker;
-import org.dynmap.markers.MarkerAPI;
-import org.dynmap.markers.MarkerIcon;
-import org.dynmap.markers.MarkerSet;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,6 +23,7 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.*;
 
 import javax.net.ssl.HttpsURLConnection;
 
@@ -1013,19 +1012,19 @@ public class DynmapMobsPlugin extends JavaPlugin {
             getVersion(version -> {
                 String curVersion = DynmapMobsPlugin.this.getDescription().getVersion();
                 cachedRelease = version;
-                    
-                if (isdev) {
-                    curVersion = curVersion.split("-")[0];
-                    //TODO: Implement check if >dev version
-                    if(curVersion.equals(version)) {
-                        info("There is a stable release of " + curVersion + " available");
+                int compare = compareVersions(curVersion, version);
+                
+                if(compare != -1) {
+                    if(compare == 0) {
+                        if(isdev) {
+                            info("There is a stable release of " + curVersion + " available");
+                            info("Get it at " + downloadURL);
+                        }
+                    }
+                    else {
+                        info("Version " + version + " is available. You are running " + curVersion);
                         info("Get it at " + downloadURL);
                     }
-                }
-                //TODO: replace with more sophisticated check
-                else if(!curVersion.equals(version)) {
-                    info("Version " + version + " is available. You are running " + curVersion);
-                    info("Get it at " + downloadURL);
                 }
             });
             getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, delay);
@@ -1037,26 +1036,26 @@ public class DynmapMobsPlugin extends JavaPlugin {
          */
         public void getVersion(final Consumer<String> consumer) {
             getServer().getScheduler().runTaskAsynchronously(DynmapMobsPlugin.this, () -> {
-                /* Try getting response body */
+                // Try getting response body
                 try (InputStream inputStream = tryConnect().getInputStream(); Scanner scanner = new Scanner(inputStream)) {
-                    /* split input stream at ","s */
+                    // split input stream at ","s
                     scanner.useDelimiter(",");
-                    /* iterate over elements */
+                    // iterate over elements
                     while (scanner.hasNext()) {
                         String key = scanner.next();
                         if(key.contains("tag_name")) {
-                            /* get release tag */
+                            // get release tag
                             String tag = key.split(":")[1].replaceAll("\"", "");
-                            /* check that release tag has the correct format */
+                            // check that release tag has the correct format
                             if (tag.matches("v\\d+\\.\\d+(\\.\\d+)?")) {
-                                /* return release tag without leading v */
+                                // return release tag without leading v
                                 consumer.accept(tag.substring(1));
                                 return;
                             }
                             else throw new Exception("Malformed release tag");
                         }
                     }
-                    /* if no release tag found, use cached release tag */
+                    // if no release tag found, use cached release tag
                     consumer.accept(cachedRelease);
                 } catch (Exception e) {
                     severe("Unable to check for updates: " + e.getMessage());
@@ -1077,6 +1076,35 @@ public class DynmapMobsPlugin extends JavaPlugin {
             connection.connect();
             if (connection.getResponseCode() == HttpsURLConnection.HTTP_OK) etag = connection.getHeaderField("etag");
             return connection;
+        }
+
+        /**
+         * Compares two version strings
+         * @param version Current version
+         * @param newVersion Latest version
+         * @return index of mismatch or 0 if same, -1 if ahead
+         */
+        public int compareVersions(String version, String newVersion) {
+            if(!version.equals(newVersion)) {
+                try {
+                    Pattern semver = Pattern.compile("^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
+                    Matcher current = semver.matcher(version);
+                    Matcher latest = semver.matcher(newVersion);
+
+                    if(current.find() && latest.find()) {
+                        for (int i=1; i<=3;i++) {
+                            if(Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) return i;
+                        }
+                        return -1;
+                    }
+                    else throw new IllegalArgumentException("Invalid semver");
+                }
+                catch (Exception e) {
+                    severe("Can't compare versions: " + e.getMessage());
+                    return -1;
+                }
+            }
+            return 0;
         }
     }
 
@@ -1271,7 +1299,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
             stop = false;
             getServer().getScheduler().scheduleSyncDelayedTask(this, new MoCreatMobUpdate(), updperiod);
-            info("Enable layer for mo'creatures mobs");
+            info("Layer for mo'creatures mobs enabled");
         }
         else {
             info("Layer for mo'creatures mobs disabled");
@@ -1344,7 +1372,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
             stop = false;
             getServer().getScheduler().scheduleSyncDelayedTask(this, new HostileMobUpdate(), updperiod);
-            info("Enable layer for hostile mobs");
+            info("Layer for hostile mobs enabled");
         }
         else {
             info("Layer for hostile mobs disabled");
@@ -1417,7 +1445,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
             stop = false;
             getServer().getScheduler().scheduleSyncDelayedTask(this, new PassiveMobUpdate(), updperiod);
-            info("Enable layer for passive mobs");
+            info("Layer for passive mobs enabled");
         }
         else {
             info("Layer for passive mobs disabled");
@@ -1486,14 +1514,18 @@ public class DynmapMobsPlugin extends JavaPlugin {
             vupdates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
             stop = false;
             getServer().getScheduler().scheduleSyncDelayedTask(this, new VehicleUpdate(), vupdperiod / 3);
-            info("Enable layer for vehicles");
+            info("Layer for vehicles enabled");
         }
         else {
             info("Layer for vehicles disabled");
         }
 
         /* Check for updates */
-        getServer().getScheduler().scheduleSyncDelayedTask(this, new UpdateCheck());
+        if(cfg.getBoolean("general.update-check", true)) {
+            getServer().getScheduler().scheduleSyncDelayedTask(this, new UpdateCheck());
+            info("Update check enabled");
+        }
+        else info("Update check disabled");
 
         info("Activated");
     }

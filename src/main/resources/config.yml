@@ -1,5 +1,9 @@
 # dynmap-mobs configuration
 #
+general:
+  # Whether to check for updates
+  update-check: true
+
 update:
   # Seconds between position updates for mobs
   period: 5.0
