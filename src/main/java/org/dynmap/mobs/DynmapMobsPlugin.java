@@ -1521,7 +1521,11 @@ public class DynmapMobsPlugin extends JavaPlugin {
         }
 
         /* Check for updates */
-        getServer().getScheduler().scheduleSyncDelayedTask(this, new UpdateCheck());
+        if(cfg.getBoolean("general.update-check", true)) {
+            getServer().getScheduler().scheduleSyncDelayedTask(this, new UpdateCheck());
+            info("Update check enabled");
+        }
+        else info("Update check disabled");
 
         info("Activated");
     }
