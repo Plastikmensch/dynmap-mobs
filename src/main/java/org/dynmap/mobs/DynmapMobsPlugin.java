@@ -838,12 +838,14 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 double y = Math.round(loc.getY() / res) * res;
                 double z = Math.round(loc.getZ() / res) * res;
                 Marker m = passive_mobicons.remove(le.getEntityId());
+                //TODO: Move label stuff into one block
                 if(nolabels) {
                     label = "";
                 }
                 else if(inc_coord) {
                     label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
                 }
+                //TODO: Put marker creation into function
                 if(m == null) { /* Not found?  Need new one */
                     m = pset.createMarker("passive_mob"+le.getEntityId(), label, curWorld.getName(), x, y, z, passive_mobs[i].icon, false);
                 }
@@ -1229,10 +1231,27 @@ public class DynmapMobsPlugin extends JavaPlugin {
         cfg.options().copyDefaults(true);   /* Load defaults, if needed */
         this.saveConfig();  /* Save updates, if needed */
 
-        /* Check if build is dev build */
-        this.isdev = this.getDescription().getVersion().contains("-");
+        // Check if build is dev build
+        isdev = this.getDescription().getVersion().contains("-");
 
         if(isdev) info("You are using an unstable build. Use at your own risk");
+
+        hideifshadow = cfg.getInt("update.hideifshadow", 15);
+        hideifundercover = cfg.getInt("update.hideifundercover", 15);
+        // Position resolution
+        res = cfg.getDouble("update.resolution", 1.0);
+        // Update period
+        double per = cfg.getDouble("update.period", 5.0);
+        if(per < 2.0) per = 2.0;
+        updperiod = (long)(per*20.0);
+        // Vehicle update period
+        double vper = cfg.getDouble("update.vehicleperiod", 10.0);
+        if(vper < 2.0) vper = 2.0;
+        vupdperiod = (long)(vper*20.0);
+
+        updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
+        vupdates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
+        stop = false;
         
         /* Now, check which mo'creatures mobs are enabled */
         Set<Class<Entity>> clsset = new HashSet<Class<Entity>>();
@@ -1242,6 +1261,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             config_mocreat_mobs[i].enabled = cfg.getBoolean("mocreat_mobs." + config_mocreat_mobs[i].mobid, false);
             config_mocreat_mobs[i].icon = markerapi.getMarkerIcon("mocreat_mobs." + config_mocreat_mobs[i].mobid);
             InputStream in = null;
+            //FIXME: tinyicons always false, because used before set
             if(tinyicons)
                 in = getClass().getResourceAsStream("/8x8/" + config_mocreat_mobs[i].mobid + ".png");
             if(in == null)
@@ -1269,8 +1289,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             }
         }
 
-        hideifshadow = cfg.getInt("update.hideifshadow", 15);
-        hideifundercover = cfg.getInt("update.hideifundercover", 15);
         /* Now, add marker set for mobs (make it transient) */
         if(mocreat_mobs.length > 0) {
             mset = markerapi.getMarkerSet("mocreat_mobs.markerset");
@@ -1290,14 +1308,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             tinyicons = cfg.getBoolean("mocreatlayer.tinyicons", false);
             nolabels = cfg.getBoolean("mocreatlayer.nolabels", false);
             inc_coord = cfg.getBoolean("mocreatlayer.inc-coord", false);
-            /* Get position resolution */
-            res = cfg.getDouble("update.resolution", 1.0);
-            /* Set up update job - based on period */
-            double per = cfg.getDouble("update.period", 5.0);
-            if(per < 2.0) per = 2.0;
-            updperiod = (long)(per*20.0);
-            updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
-            stop = false;
             getServer().getScheduler().scheduleSyncDelayedTask(this, new MoCreatMobUpdate(), updperiod);
             info("Layer for mo'creatures mobs enabled");
         }
@@ -1342,8 +1352,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             }
         }
 
-        hideifshadow = cfg.getInt("update.hideifshadow", 15);
-        hideifundercover = cfg.getInt("update.hideifundercover", 15);
         /* Now, add marker set for mobs (make it transient) */
         if(hostile_mobs.length > 0) {
             hset = markerapi.getMarkerSet("hostile_mobs.markerset");
@@ -1363,22 +1371,12 @@ public class DynmapMobsPlugin extends JavaPlugin {
             tinyicons = cfg.getBoolean("hostilelayer.tinyicons", false);
             nolabels = cfg.getBoolean("hostilelayer.nolabels", false);
             inc_coord = cfg.getBoolean("hostilelayer.inc-coord", false);
-            /* Get position resolution */
-            res = cfg.getDouble("update.resolution", 1.0);
-            /* Set up update job - based on period */
-            double per = cfg.getDouble("update.period", 5.0);
-            if(per < 2.0) per = 2.0;
-            updperiod = (long)(per*20.0);
-            updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
-            stop = false;
             getServer().getScheduler().scheduleSyncDelayedTask(this, new HostileMobUpdate(), updperiod);
             info("Layer for hostile mobs enabled");
         }
         else {
             info("Layer for hostile mobs disabled");
         }
-
-
 
         /* Now, check which passive mobs are enabled */
         clsset = new HashSet<Class<Entity>>();
@@ -1415,8 +1413,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             }
         }
 
-        hideifshadow = cfg.getInt("update.hideifshadow", 15);
-        hideifundercover = cfg.getInt("update.hideifundercover", 15);
         /* Now, add marker set for mobs (make it transient) */
         if(passive_mobs.length > 0) {
             pset = markerapi.getMarkerSet("passive_mobs.markerset");
@@ -1436,14 +1432,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             tinyicons = cfg.getBoolean("passivelayer.tinyicons", false);
             nolabels = cfg.getBoolean("passivelayer.nolabels", false);
             inc_coord = cfg.getBoolean("passivelayer.inc-coord", false);
-            /* Get position resolution */
-            res = cfg.getDouble("update.resolution", 1.0);
-            /* Set up update job - based on period */
-            double per = cfg.getDouble("update.period", 5.0);
-            if(per < 2.0) per = 2.0;
-            updperiod = (long)(per*20.0);
-            updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
-            stop = false;
             getServer().getScheduler().scheduleSyncDelayedTask(this, new PassiveMobUpdate(), updperiod);
             info("Layer for passive mobs enabled");
         }
@@ -1505,14 +1493,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             vtinyicons = cfg.getBoolean("vehiclelayer.tinyicons", false);
             vnolabels = cfg.getBoolean("vehiclelayer.nolabels", false);
             vinc_coord = cfg.getBoolean("vehiclelayer.inc-coord", false);
-            /* Get position resolution */
-            res = cfg.getDouble("update.resolution", 1.0);
-            /* Set up update job - based on period */
-            double per = cfg.getDouble("update.vehicleperiod", 5.0);
-            if(per < 2.0) per = 2.0;
-            vupdperiod = (long)(per*20.0);
-            vupdates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
-            stop = false;
+            //TODO: Find out why period is divided by 3 here
             getServer().getScheduler().scheduleSyncDelayedTask(this, new VehicleUpdate(), vupdperiod / 3);
             info("Layer for vehicles enabled");
         }
