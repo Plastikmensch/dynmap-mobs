@@ -42,12 +42,23 @@ public class DynmapMobsPlugin extends JavaPlugin {
     long vupdperiod;
     int hideifundercover;
     int hideifshadow;
-    boolean tinyicons;
-    boolean nolabels;
+    // Mo' creatures layer config
+    boolean mtinyicons;
+    boolean mnolabels;
+    boolean minc_coord;
+    // Hostile mob layer config
+    boolean htinyicons;
+    boolean hnolabels;
+    boolean hinc_coord;
+    // Passive mob layer config
+    boolean ptinyicons;
+    boolean pnolabels;
+    boolean pinc_coord;
+    // Vehicle layer config
     boolean vtinyicons;
     boolean vnolabels;
-    boolean inc_coord;
     boolean vinc_coord;
+
     boolean stop;
     boolean isdev;
     boolean reload = false;
@@ -403,10 +414,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 double y = Math.round(loc.getY() / res) * res;
                 double z = Math.round(loc.getZ() / res) * res;
                 Marker m = mocreat_mobicons.remove(le.getEntityId());
-                if(nolabels) {
+                if(mnolabels) {
                     label = "";
                 }
-                else if(inc_coord) {
+                else if(minc_coord) {
                     label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
                 }
                 if(m == null) { /* Not found?  Need new one */
@@ -549,10 +560,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 double y = Math.round(loc.getY() / res) * res;
                 double z = Math.round(loc.getZ() / res) * res;
                 Marker m = hostile_mobicons.remove(le.getEntityId());
-                if(nolabels) {
+                if(hnolabels) {
                     label = "";
                 }
-                else if(inc_coord) {
+                else if(hinc_coord) {
                     label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
                 }
                 if(m == null) { /* Not found?  Need new one */
@@ -839,10 +850,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 double z = Math.round(loc.getZ() / res) * res;
                 Marker m = passive_mobicons.remove(le.getEntityId());
                 //TODO: Move label stuff into one block
-                if(nolabels) {
+                if(pnolabels) {
                     label = "";
                 }
-                else if(inc_coord) {
+                else if(pinc_coord) {
                     label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
                 }
                 //TODO: Put marker creation into function
@@ -1252,6 +1263,22 @@ public class DynmapMobsPlugin extends JavaPlugin {
         updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
         vupdates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
         stop = false;
+
+        mtinyicons = cfg.getBoolean("mocreatlayer.tinyicons", false);
+        mnolabels = cfg.getBoolean("mocreatlayer.nolabels", false);
+        minc_coord = cfg.getBoolean("mocreatlayer.inc-coord", false);
+
+        htinyicons = cfg.getBoolean("hostilelayer.tinyicons", false);
+        hnolabels = cfg.getBoolean("hostilelayer.nolabels", false);
+        hinc_coord = cfg.getBoolean("hostilelayer.inc-coord", false);
+
+        ptinyicons = cfg.getBoolean("passivelayer.tinyicons", false);
+        pnolabels = cfg.getBoolean("passivelayer.nolabels", false);
+        pinc_coord = cfg.getBoolean("passivelayer.inc-coord", false);
+
+        vtinyicons = cfg.getBoolean("vehiclelayer.tinyicons", false);
+        vnolabels = cfg.getBoolean("vehiclelayer.nolabels", false);
+        vinc_coord = cfg.getBoolean("vehiclelayer.inc-coord", false);
         
         /* Now, check which mo'creatures mobs are enabled */
         Set<Class<Entity>> clsset = new HashSet<Class<Entity>>();
@@ -1261,8 +1288,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             config_mocreat_mobs[i].enabled = cfg.getBoolean("mocreat_mobs." + config_mocreat_mobs[i].mobid, false);
             config_mocreat_mobs[i].icon = markerapi.getMarkerIcon("mocreat_mobs." + config_mocreat_mobs[i].mobid);
             InputStream in = null;
-            //FIXME: tinyicons always false, because used before set
-            if(tinyicons)
+            if(mtinyicons)
                 in = getClass().getResourceAsStream("/8x8/" + config_mocreat_mobs[i].mobid + ".png");
             if(in == null)
                 in = getClass().getResourceAsStream("/" + config_mocreat_mobs[i].mobid + ".png");
@@ -1305,9 +1331,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             int minzoom = cfg.getInt("mocreatlayer.minzoom", 0);
             if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
                 mset.setMinZoom(minzoom);
-            tinyicons = cfg.getBoolean("mocreatlayer.tinyicons", false);
-            nolabels = cfg.getBoolean("mocreatlayer.nolabels", false);
-            inc_coord = cfg.getBoolean("mocreatlayer.inc-coord", false);
             getServer().getScheduler().scheduleSyncDelayedTask(this, new MoCreatMobUpdate(), updperiod);
             info("Layer for mo'creatures mobs enabled");
         }
@@ -1325,7 +1348,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             config_hostile_mobs[i].enabled = cfg.getBoolean("hostile_mobs." + config_hostile_mobs[i].mobid, false);
             config_hostile_mobs[i].icon = markerapi.getMarkerIcon("hostile_mobs." + config_hostile_mobs[i].mobid);
             InputStream in = null;
-            if(tinyicons)
+            if(htinyicons)
                 in = getClass().getResourceAsStream("/8x8/" + config_hostile_mobs[i].mobid + ".png");
             if(in == null)
                 in = getClass().getResourceAsStream("/" + config_hostile_mobs[i].mobid + ".png");
@@ -1368,9 +1391,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             int minzoom = cfg.getInt("hostilelayer.minzoom", 0);
             if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
                 hset.setMinZoom(minzoom);
-            tinyicons = cfg.getBoolean("hostilelayer.tinyicons", false);
-            nolabels = cfg.getBoolean("hostilelayer.nolabels", false);
-            inc_coord = cfg.getBoolean("hostilelayer.inc-coord", false);
             getServer().getScheduler().scheduleSyncDelayedTask(this, new HostileMobUpdate(), updperiod);
             info("Layer for hostile mobs enabled");
         }
@@ -1386,7 +1406,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             config_passive_mobs[i].enabled = cfg.getBoolean("passive_mobs." + config_passive_mobs[i].mobid, false);
             config_passive_mobs[i].icon = markerapi.getMarkerIcon("passive_mobs." + config_passive_mobs[i].mobid);
             InputStream in = null;
-            if(tinyicons)
+            if(ptinyicons)
                 in = getClass().getResourceAsStream("/8x8/" + config_passive_mobs[i].mobid + ".png");
             if(in == null)
                 in = getClass().getResourceAsStream("/" + config_passive_mobs[i].mobid + ".png");
@@ -1429,9 +1449,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             int minzoom = cfg.getInt("passivelayer.minzoom", 0);
             if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
                 pset.setMinZoom(minzoom);
-            tinyicons = cfg.getBoolean("passivelayer.tinyicons", false);
-            nolabels = cfg.getBoolean("passivelayer.nolabels", false);
-            inc_coord = cfg.getBoolean("passivelayer.inc-coord", false);
             getServer().getScheduler().scheduleSyncDelayedTask(this, new PassiveMobUpdate(), updperiod);
             info("Layer for passive mobs enabled");
         }
@@ -1448,7 +1465,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             config_vehicles[i].enabled = cfg.getBoolean("vehicles." + config_vehicles[i].mobid, false);
             config_vehicles[i].icon = markerapi.getMarkerIcon("vehicles." + config_vehicles[i].mobid);
             InputStream in = null;
-            if(tinyicons)
+            if(vtinyicons)
                 in = getClass().getResourceAsStream("/8x8/" + config_vehicles[i].mobid + ".png");
             if(in == null)
                 in = getClass().getResourceAsStream("/" + config_vehicles[i].mobid + ".png");
@@ -1490,9 +1507,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             int minzoom = cfg.getInt("vehiclelayer.minzoom", 0);
             if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
                 vset.setMinZoom(minzoom);
-            vtinyicons = cfg.getBoolean("vehiclelayer.tinyicons", false);
-            vnolabels = cfg.getBoolean("vehiclelayer.nolabels", false);
-            vinc_coord = cfg.getBoolean("vehiclelayer.inc-coord", false);
             //TODO: Find out why period is divided by 3 here
             getServer().getScheduler().scheduleSyncDelayedTask(this, new VehicleUpdate(), vupdperiod / 3);
             info("Layer for vehicles enabled");
