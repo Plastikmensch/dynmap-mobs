@@ -382,34 +382,36 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     continue;
                 }
 
+                Location loc = le.getLocation();
+                if(isHidden(loc)) continue;
+                double x = Math.round(loc.getX() / res) * res;
+                double y = Math.round(loc.getY() / res) * res;
+                double z = Math.round(loc.getZ() / res) * res;
+
                 String label = null;
+
+                if(!mnolabels) {
+                    if(label == null) {
+                        label = mocreat_mobs[i].label;
+                    }
+    
+                    if (le.getCustomName() != null) {
+                        label = le.getCustomName() + " (" + label + ")";
+                    }
+
+                    if(minc_coord) {
+                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
+                    }
+                }
+                else label = "";
 
                 if(i >= mocreat_mobs.length) {
                     continue;
                 }
-                if(label == null) {
-                    label = mocreat_mobs[i].label;
-                }
-
-                if (le.getCustomName() != null) {
-                    label = le.getCustomName() + " (" + label + ")";
-                }
-
-                Location loc = le.getLocation();
-                
-                if(isHidden(loc)) continue;
 
                 /* See if we already have marker */
-                double x = Math.round(loc.getX() / res) * res;
-                double y = Math.round(loc.getY() / res) * res;
-                double z = Math.round(loc.getZ() / res) * res;
                 Marker m = mocreat_mobicons.remove(le.getEntityId());
-                if(mnolabels) {
-                    label = "";
-                }
-                else if(minc_coord) {
-                    label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                }
+
                 if(m == null) { /* Not found?  Need new one */
                     m = mset.createMarker("mocreat_mob"+le.getEntityId(), label, curWorld.getName(), x, y, z, mocreat_mobs[i].icon, false);
                 }
@@ -515,36 +517,42 @@ public class DynmapMobsPlugin extends JavaPlugin {
 
                 Location loc = le.getLocation();
                 if(isHidden(loc)) continue;
+                double x = Math.round(loc.getX() / res) * res;
+                double y = Math.round(loc.getY() / res) * res;
+                double z = Math.round(loc.getZ() / res) * res;
 
                 String label = null;
+
+                // Leave outside of label, because it modifies i, which would be skipped if nolabels is set to true
                 if(hostile_mobs[i].mobid.equals("spider")) {    /* Check for jockey */
                     if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
                         i = find("spiderjockey", hostile_mobs);    /* Make jockey */
                     }
                 }
 
+                if(!hnolabels) {
+                    if(label == null) {
+                        label = hostile_mobs[i].label;
+                    }
+    
+                    if (le.getCustomName() != null) {
+                        label = le.getCustomName() + " (" + label + ")";
+                    }
+
+                    if(hinc_coord) {
+                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
+                    }
+                }
+                else label = "";
+
                 if(i >= hostile_mobs.length) {
                     continue;
                 }
-                if(label == null) {
-                    label = hostile_mobs[i].label;
-                }
-
-                if (le.getCustomName() != null) {
-                    label = le.getCustomName() + " (" + label + ")";
-                }
 
                 /* See if we already have marker */
-                double x = Math.round(loc.getX() / res) * res;
-                double y = Math.round(loc.getY() / res) * res;
-                double z = Math.round(loc.getZ() / res) * res;
+                
                 Marker m = hostile_mobicons.remove(le.getEntityId());
-                if(hnolabels) {
-                    label = "";
-                }
-                else if(hinc_coord) {
-                    label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                }
+
                 if(m == null) { /* Not found?  Need new one */
                     m = hset.createMarker("hostile_mob"+le.getEntityId(), label, curWorld.getName(), x, y, z, hostile_mobs[i].icon, false);
                 }
@@ -650,91 +658,16 @@ public class DynmapMobsPlugin extends JavaPlugin {
 
                 Location loc = le.getLocation();
                 if(isHidden(loc)) continue;
+                double x = Math.round(loc.getX() / res) * res;
+                double y = Math.round(loc.getY() / res) * res;
+                double z = Math.round(loc.getZ() / res) * res;
 
                 String label = null;
+
+                // Leave outside label if, because i is modified
                 if(passive_mobs[i].mobid.equals("chicken")) {    /* Check for jockey */
                     if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
                         i = find("chickenjockey", passive_mobs);    /* Make jockey , passive_mobs*/
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("wolf")) { /* Check for tamed wolf */
-                    Wolf wolf = (Wolf)le;
-                    if(wolf.isTamed()) {
-                        i = find("tamedwolf", passive_mobs);
-                        AnimalTamer t = wolf.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "Wolf (" + ((OfflinePlayer)t).getName() + ")";
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("cat")) { /* Check for tamed cat */
-                    Cat cat = (Cat)le;
-                    if(cat.isTamed()) {
-                        i = find("tamedcat", passive_mobs);
-                        AnimalTamer t = cat.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "Cat (" + ((OfflinePlayer)t).getName() + ")";
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("vanillahorse")) { /* Check for tamed horse */
-                    Horse horse = (Horse)le;
-                    if(horse.isTamed()) {
-                        i = find("tamedvanillahorse", passive_mobs);
-                        AnimalTamer t = horse.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "Horse (" + ((OfflinePlayer)t).getName() + ")";
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("donkey")) { /* Check for tamed donkey */
-                    Donkey donkey = (Donkey)le;
-                    if(donkey.isTamed()) {
-                        i = find("tameddonkey", passive_mobs);
-                        AnimalTamer t = donkey.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "Donkey (" + ((OfflinePlayer)t).getName() + ")";
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("mule")) { /* Check for tamed mule */
-                    Mule mule = (Mule)le;
-                    if(mule.isTamed()) {
-                        i = find("tamedmule", passive_mobs);
-                        AnimalTamer t = mule.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "Mule (" + ((OfflinePlayer)t).getName() + ")";
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("traderllama")) { /* Check for tamed traderllama */
-                    TraderLlama traderllama = (TraderLlama)le;
-                    if(traderllama.isTamed()) {
-                        i = find("tamedtraderllama", passive_mobs);
-                        AnimalTamer t = traderllama.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "TraderLlama (" + ((OfflinePlayer)t).getName() + ")";
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("llama")) { /* Check for tamed llama */
-                    Llama llama = (Llama)le;
-                    if(llama.isTamed()) {
-                        i = find("tamedllama", passive_mobs);
-                        AnimalTamer t = llama.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "Llama (" + ((OfflinePlayer)t).getName() + ")";
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("parrot")) { /* Check for tamed parrot */
-                    Parrot parrot = (Parrot)le;
-                    if(parrot.isTamed()) {
-                        i = find("tamedparrot", passive_mobs);
-                        AnimalTamer t = parrot.getOwner();
-                        if((t != null) && (t instanceof OfflinePlayer)) {
-                            label = "Parrot (" + ((OfflinePlayer)t).getName() + ")";
-                        }
                     }
                 }
                 else if(passive_mobs[i].mobid.equals("villager")) {
@@ -800,31 +733,46 @@ public class DynmapMobsPlugin extends JavaPlugin {
                         }
                     }
                 }
+               /*
+                * Check if entity is tameable
+                * Append owner to label
+                * Requires all tamed mobids to start with "tamed"
+                * NOTE: Something caused index out of bounds here once, probably weird java/file cache issue
+                */
+               else if(le instanceof Tameable) {
+                   info("Is tameable: " + le.getClass().getName());
+                   Tameable tameable = (Tameable)le;
+                   if(tameable.isTamed()) {
+                       i = find("tamed" + passive_mobs[i].mobid, passive_mobs);
+                       AnimalTamer t = tameable.getOwner();
+                       if((t != null) && (t instanceof OfflinePlayer)) {
+                           label = passive_mobs[i].label + " (" + ((OfflinePlayer)t).getName() + ")";
+                       }
+                   }
+               }
 
                 if(i >= passive_mobs.length) {
                     continue;
                 }
-                if(label == null) {
-                    label = passive_mobs[i].label;
+
+                if(!pnolabels) {
+                    if(label == null) {
+                        label = passive_mobs[i].label;
+                    }
+
+                    if (le.getCustomName() != null) {
+                        label = le.getCustomName() + " (" + label + ")";
+                    }
+
+                    if(pinc_coord) {
+                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
+                    }
                 }
-
-                if (le.getCustomName() != null) {
-                    label = le.getCustomName() + " (" + label + ")";
-                }
-
-
+                else label = "";
+                
                 /* See if we already have marker */
-                double x = Math.round(loc.getX() / res) * res;
-                double y = Math.round(loc.getY() / res) * res;
-                double z = Math.round(loc.getZ() / res) * res;
                 Marker m = passive_mobicons.remove(le.getEntityId());
-                //TODO: Move label stuff into one block
-                if(pnolabels) {
-                    label = "";
-                }
-                else if(pinc_coord) {
-                    label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                }
+
                 //TODO: Put marker creation into function
                 if(m == null) { /* Not found?  Need new one */
                     m = pset.createMarker("passive_mob"+le.getEntityId(), label, curWorld.getName(), x, y, z, passive_mobs[i].icon, false);
@@ -932,25 +880,30 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     continue;
                 }
                 if(isHidden(loc)) continue;
-
-                String label = null;
-                if(i >= vehicles.length) {
-                    continue;
-                }
-                if(label == null) {
-                    label = vehicles[i].label;
-                }
-
-                /* See if we already have marker */
                 double x = Math.round(loc.getX() / res) * res;
                 double y = Math.round(loc.getY() / res) * res;
                 double z = Math.round(loc.getZ() / res) * res;
-                Marker m = vehicleicons.remove(le.getEntityId());
-                if(vnolabels)
-                    label = "";
-                else if(vinc_coord) {
-                    label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
+
+                String label = null;
+
+                if(!vnolabels) {
+                    if(label == null) {
+                        label = vehicles[i].label;
+                    }
+
+                    if(vinc_coord) {
+                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
+                    }
                 }
+                else label = "";
+
+                if(i >= vehicles.length) {
+                    continue;
+                }
+                
+                /* See if we already have marker */
+                Marker m = vehicleicons.remove(le.getEntityId());
+
                 if(m == null) { /* Not found?  Need new one */
                     m = vset.createMarker("vehicle"+le.getEntityId(), label, curWorld.getName(), x, y, z, vehicles[i].icon, false);
                 }
@@ -1093,6 +1046,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             if(mobs[idx].mobid.equals(mobid)) return idx;
             idx++;
         }
+        severe("find: Couldn't find " + mobid);
         return mobs.length;
     }
 
