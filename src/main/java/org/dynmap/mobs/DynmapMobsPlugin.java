@@ -396,19 +396,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 }
 
                 Location loc = le.getLocation();
-                Block blk = null;
-                if(hideifshadow < 15) {
-                    blk = loc.getBlock();
-                    if(blk.getLightLevel() <= hideifshadow) {
-                        continue;
-                    }
-                }
-                if(hideifundercover < 15) {
-                    if(blk == null) blk = loc.getBlock();
-                    if(blk.getLightFromSky() <= hideifundercover) {
-                        continue;
-                    }
-                }
+                
+                if(isHidden(loc)) continue;
+
                 /* See if we already have marker */
                 double x = Math.round(loc.getX() / res) * res;
                 double y = Math.round(loc.getY() / res) * res;
@@ -523,6 +513,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     continue;
                 }
 
+                Location loc = le.getLocation();
+                if(isHidden(loc)) continue;
+
                 String label = null;
                 if(hostile_mobs[i].mobid.equals("spider")) {    /* Check for jockey */
                     if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
@@ -541,20 +534,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     label = le.getCustomName() + " (" + label + ")";
                 }
 
-                Location loc = le.getLocation();
-                Block blk = null;
-                if(hideifshadow < 15) {
-                    blk = loc.getBlock();
-                    if(blk.getLightLevel() <= hideifshadow) {
-                        continue;
-                    }
-                }
-                if(hideifundercover < 15) {
-                    if(blk == null) blk = loc.getBlock();
-                    if(blk.getLightFromSky() <= hideifundercover) {
-                        continue;
-                    }
-                }
                 /* See if we already have marker */
                 double x = Math.round(loc.getX() / res) * res;
                 double y = Math.round(loc.getY() / res) * res;
@@ -668,6 +647,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 if(i >= passive_mobs.length) {
                     continue;
                 }
+
+                Location loc = le.getLocation();
+                if(isHidden(loc)) continue;
 
                 String label = null;
                 if(passive_mobs[i].mobid.equals("chicken")) {    /* Check for jockey */
@@ -830,20 +812,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     label = le.getCustomName() + " (" + label + ")";
                 }
 
-                Location loc = le.getLocation();
-                Block blk = null;
-                if(hideifshadow < 15) {
-                    blk = loc.getBlock();
-                    if(blk.getLightLevel() <= hideifshadow) {
-                        continue;
-                    }
-                }
-                if(hideifundercover < 15) {
-                    if(blk == null) blk = loc.getBlock();
-                    if(blk.getLightFromSky() <= hideifundercover) {
-                        continue;
-                    }
-                }
+
                 /* See if we already have marker */
                 double x = Math.round(loc.getX() / res) * res;
                 double y = Math.round(loc.getY() / res) * res;
@@ -957,6 +926,13 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 if(i >= vehicles.length) {
                     continue;
                 }
+                
+                Location loc = le.getLocation();
+                if(curWorld.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4) == false) {
+                    continue;
+                }
+                if(isHidden(loc)) continue;
+
                 String label = null;
                 if(i >= vehicles.length) {
                     continue;
@@ -964,23 +940,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 if(label == null) {
                     label = vehicles[i].label;
                 }
-                Location loc = le.getLocation();
-                if(curWorld.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4) == false) {
-                    continue;
-                }
-                Block blk = null;
-                if(hideifshadow < 15) {
-                    blk = loc.getBlock();
-                    if(blk.getLightLevel() <= hideifshadow) {
-                        continue;
-                    }
-                }
-                if(hideifundercover < 15) {
-                    if(blk == null) blk = loc.getBlock();
-                    if(blk.getLightFromSky() <= hideifundercover) {
-                        continue;
-                    }
-                }
+
                 /* See if we already have marker */
                 double x = Math.round(loc.getX() / res) * res;
                 double y = Math.round(loc.getY() / res) * res;
@@ -1134,6 +1094,26 @@ public class DynmapMobsPlugin extends JavaPlugin {
             idx++;
         }
         return mobs.length;
+    }
+
+    /**
+     * Check whether entity is considered hidden
+     * @param loc Location of entity
+     * @return true if hidden, otherwise false
+     */
+    private boolean isHidden(Location loc) {
+        Block blk = loc.getBlock();
+        if(hideifshadow < 15) {
+            if(blk.getLightLevel() <= hideifshadow) {
+                return true;
+            }
+        }
+        if(hideifundercover < 15) {
+            if(blk.getLightFromSky() <= hideifundercover) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private class OurServerListener implements Listener {
