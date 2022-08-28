@@ -4,9 +4,7 @@ import org.bukkit.block.Block;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.*;
 import org.bukkit.entity.Villager.Profession;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
+import org.bukkit.event.*;
 import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
@@ -15,8 +13,7 @@ import org.dynmap.DynmapAPI;
 import org.dynmap.markers.*;
 import org.dynmap.markers.Marker;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.*;
@@ -33,46 +30,19 @@ public class DynmapMobsPlugin extends JavaPlugin {
     DynmapAPI api;
     MarkerAPI markerapi;
     FileConfiguration cfg;
-    MarkerSet mset;
-    MarkerSet hset;
-    MarkerSet pset;
-    MarkerSet vset;
+    MobLayerConfig mconf = new MobLayerConfig("mocreat_mob");
+    MobLayerConfig hconf = new MobLayerConfig("hostile_mob");
+    MobLayerConfig pconf = new MobLayerConfig("passive_mob");
+    MobLayerConfig vconf = new MobLayerConfig("vehicle", true);
     double res; /* Position resolution */
-    long updperiod;
-    long vupdperiod;
     int hideifundercover;
     int hideifshadow;
-    // Mo' creatures layer config
-    boolean mtinyicons;
-    boolean mnolabels;
-    boolean minc_coord;
-    // Hostile mob layer config
-    boolean htinyicons;
-    boolean hnolabels;
-    boolean hinc_coord;
-    // Passive mob layer config
-    boolean ptinyicons;
-    boolean pnolabels;
-    boolean pinc_coord;
-    // Vehicle layer config
-    boolean vtinyicons;
-    boolean vnolabels;
-    boolean vinc_coord;
-
     boolean stop;
     boolean isdev;
     boolean reload = false;
     static String obcpackage;
     static String nmspackage;
     Method gethandle;
-    
-    int updates_per_tick = 20;
-    int vupdates_per_tick = 20;
-    
-    HashMap<String, Integer> mlookup_cache = new HashMap<String, Integer>();
-    HashMap<String, Integer> hlookup_cache = new HashMap<String, Integer>();
-    HashMap<String, Integer> plookup_cache = new HashMap<String, Integer>();
-    HashMap<String, Integer> vlookup_cache = new HashMap<String, Integer>();
     
     @Override
     public void onLoad() {
@@ -126,16 +96,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             }
         }
     };
-
-    MobMapping mocreat_mobs[];
-    MobMapping hostile_mobs[];
-    MobMapping passive_mobs[];
-    MobMapping vehicles[];
-
-    private Map<Integer, Marker> mocreat_mobicons = new HashMap<Integer, Marker>();
-    private Map<Integer, Marker> hostile_mobicons = new HashMap<Integer, Marker>();
-    private Map<Integer, Marker> passive_mobicons = new HashMap<Integer, Marker>();
-    private Map<Integer, Marker> vehicleicons = new HashMap<Integer, Marker>();
 
     private MobMapping config_mocreat_mobs[] = {
         // Mo'Creatures
@@ -294,627 +254,277 @@ public class DynmapMobsPlugin extends JavaPlugin {
     public static void severe(String msg) {
         log.log(Level.SEVERE, msg);
     }
-    
-    private class MoCreatMobUpdate implements Runnable {
-        Map<Integer,Marker> newmap = new HashMap<Integer,Marker>(); /* Build new map */
+
+    private class MobLayerConfig {
+        MobMapping[] mobmap;
+        MarkerSet set;
+        Map<Integer,Marker> mobicons = new HashMap<Integer, Marker>();
+        HashMap<String, Integer> cache = new HashMap<String, Integer>();
+        boolean tinyicons;
+        boolean nolabels;
+        boolean inc_coord;
+        boolean isVehicle;
+        long period;
+        int updates_per_tick;
+        String identifier;
+
+        MobLayerConfig(String identifier) {
+            this(identifier, false);
+        }
+        MobLayerConfig(String identifier, boolean isVehicle) {
+            this.identifier = identifier;
+            this.isVehicle = isVehicle;
+        }
+
+    }
+    private class MobUpdate implements Runnable {
+        Map<Integer,Marker> newmap = new HashMap<Integer,Marker>();
         ArrayList<World> worldsToDo = null;
         List<LivingEntity> mobsToDo = null;
         int mobIndex = 0;
         World curWorld = null;
+        MobLayerConfig ml_config;
+
+        MobUpdate(MobLayerConfig conf) {
+            ml_config = conf;
+        }
         
         public void run() {
-            if(stop || mocreat_mobs == null || mocreat_mobs.length == 0 || mset == null ) {
+            if(stop || ml_config.mobmap == null || ml_config.mobmap.length == 0 || ml_config.set == null) {
+                info("Something is null or 0");
                 return;
             }
-            // If needed, prime world list
-            if (worldsToDo == null) {
+
+            if(worldsToDo == null) {
                 worldsToDo = new ArrayList<World>(getServer().getWorlds());
             }
-            while (mobsToDo == null) {
-                if (worldsToDo.isEmpty()) {
-                    // Now, review old map - anything left is gone
-                    for(Marker oldm : mocreat_mobicons.values()) {
+            while(mobsToDo == null) {
+                if(worldsToDo.isEmpty()) {
+                    info("No worlds");
+                    //Review old map
+                    for(Marker oldm : ml_config.mobicons.values()) {
                         oldm.deleteMarker();
                     }
-                    // And replace with new map
-                    mocreat_mobicons = newmap;        
+                    // Replace with new map
+                    ml_config.mobicons = newmap;
                     // Schedule next run
-                    getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, new MoCreatMobUpdate(), updperiod);
+                    getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, new MobUpdate(ml_config), ml_config.period);
                     return;
                 }
                 else {
-                    curWorld = worldsToDo.remove(0); // Get next world
-                    mobsToDo = curWorld.getLivingEntities();     // Get living entities
+                    curWorld = worldsToDo.remove(0);
+                    mobsToDo = curWorld.getLivingEntities();
                     mobIndex = 0;
-                    if ((mobsToDo != null) && mobsToDo.isEmpty()) {
+                    if((mobsToDo != null) && mobsToDo.isEmpty()) {
                         mobsToDo = null;
                     }
                 }
             }
+
             // Process up to limit per tick
-            for (int cnt = 0; cnt < updates_per_tick; cnt++) {
-                if (mobIndex >= mobsToDo.size()) {
+            for(int cnt = 0; cnt < ml_config.updates_per_tick; cnt++) {
+                if(mobIndex >= mobsToDo.size()) {
                     mobsToDo = null;
                     break;
                 }
                 // Get next entity
                 LivingEntity le = mobsToDo.get(mobIndex);
                 mobIndex++;
-                
                 int i;
-                
-                /* See if entity is mob we care about */
+
+                // Do some weird shit
                 String clsid = null;
                 if(gethandle != null) {
                     try {
                         clsid = gethandle.invoke(le).getClass().getName();
-                    } catch (Exception x) {
                     }
+                    catch (Exception x) {}
                 }
-                
-                if(clsid == null)
+
+                if(clsid == null) {
                     clsid = le.getClass().getName();
-                Integer idx = mlookup_cache.get(clsid);
+                }
+
+                // Get index from cache
+                Integer idx = ml_config.cache.get(clsid);
+                // clsid not in cache
                 if(idx == null) {
-                    for(i = 0; i < mocreat_mobs.length; i++) {
-                        if((mocreat_mobs[i].mobclass != null) && mocreat_mobs[i].mobclass.isInstance(le)){
-                            if (mocreat_mobs[i].entclsid == null) {
-                                break;
-                            }
+                    for(i = 0; i < ml_config.mobmap.length; i++) {
+                        if((ml_config.mobmap[i].mobclass != null) && ml_config.mobmap[i].mobclass.isInstance(le)) {
+                            if(ml_config.mobmap[i].entclsid == null) break;
                             else if(gethandle != null) {
                                 Object obcentity = null;
                                 try {
                                     obcentity = gethandle.invoke(le);
-                                } catch (Exception x) {
                                 }
-                                if ((mocreat_mobs[i].entclass != null) && (obcentity != null) && (mocreat_mobs[i].entclass.isInstance(obcentity))) {
-                                    break;
-                                }
+                                catch (Exception x) {}
+
+                                if((ml_config.mobmap[i].entclass != null) && (obcentity != null) && (ml_config.mobmap[i].entclass.isInstance(obcentity))) break;
                             }
                         }
                     }
-                    mlookup_cache.put(clsid, i);
+                    ml_config.cache.put(clsid, i);
                 }
+                // Found in cache
                 else {
                     i = idx;
                 }
-                if(i >= mocreat_mobs.length) {
-                    continue;
-                }
+
+                // Safeguard against IndexOutOfBounds
+                if(i >= ml_config.mobmap.length) continue;
 
                 Location loc = le.getLocation();
+                if(ml_config.isVehicle && curWorld.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4) == false) continue;
                 if(isHidden(loc)) continue;
                 double x = Math.round(loc.getX() / res) * res;
                 double y = Math.round(loc.getY() / res) * res;
                 double z = Math.round(loc.getZ() / res) * res;
 
-                String label = null;
+                // Set label
+                Object[] obj = getLabel(le, i, x, y, z);
+                i = (int)obj[1];
+                // Another safeguard against IndexOutOfBounds
+                if(i >= ml_config.mobmap.length) continue;
+                String label = (String) obj[0];
 
-                if(!mnolabels) {
-                    if(label == null) {
-                        label = mocreat_mobs[i].label;
-                    }
-    
-                    if (le.getCustomName() != null) {
-                        label = le.getCustomName() + " (" + label + ")";
-                    }
-
-                    if(minc_coord) {
-                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                    }
-                }
-                else label = "";
-
-                if(i >= mocreat_mobs.length) {
-                    continue;
-                }
-
-                /* See if we already have marker */
-                Marker m = mocreat_mobicons.remove(le.getEntityId());
-
-                if(m == null) { /* Not found?  Need new one */
-                    m = mset.createMarker("mocreat_mob"+le.getEntityId(), label, curWorld.getName(), x, y, z, mocreat_mobs[i].icon, false);
-                }
-                else {  /* Else, update position if needed */
-                    m.setLocation(curWorld.getName(), x, y, z);
-                    m.setLabel(label);
-                    m.setMarkerIcon(mocreat_mobs[i].icon);
-                }
-                if (m != null) {
-                    newmap.put(le.getEntityId(), m);    /* Add to new map */
-                }
+                // Create Marker
+                createUpdateMarker(le.getEntityId(), label, x, y, z, ml_config.mobmap[i].icon);
             }
             getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, 1);
         }
-    }
 
-    private class HostileMobUpdate implements Runnable {
-        Map<Integer,Marker> newmap = new HashMap<Integer,Marker>(); /* Build new map */
-        ArrayList<World> worldsToDo = null;
-        List<LivingEntity> mobsToDo = null;
-        int mobIndex = 0;
-        World curWorld = null;
-        
-        public void run() {
-            if(stop || hostile_mobs == null || hostile_mobs.length == 0 || hset == null ) {
-                return;
-            }
-            // If needed, prime world list
-            if (worldsToDo == null) {
-                worldsToDo = new ArrayList<World>(getServer().getWorlds());
-            }
-            while (mobsToDo == null) {
-                if (worldsToDo.isEmpty()) {
-                    // Now, review old map - anything left is gone
-                    for(Marker oldm : hostile_mobicons.values()) {
-                        oldm.deleteMarker();
-                    }
-                    // And replace with new map
-                    hostile_mobicons = newmap;        
-                    // Schedule next run
-                    getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, new HostileMobUpdate(), updperiod);
-                    return;
-                }
-                else {
-                    curWorld = worldsToDo.remove(0); // Get next world
-                    mobsToDo = curWorld.getLivingEntities();     // Get living entities
-                    mobIndex = 0;
-                    if ((mobsToDo != null) && mobsToDo.isEmpty()) {
-                        mobsToDo = null;
-                    }
+        public Object[] getLabel(LivingEntity le, int i, double x, double y, double z) {
+            String lbl = null;
+            // Check for spider jockey
+            if(ml_config.mobmap[i].mobid.equals("spider")) {
+                if(le.getPassengers() != null && !le.getPassengers().isEmpty()) {
+                    i = find("spiderjockey", hconf.mobmap);
                 }
             }
-            // Process up to limit per tick
-            for (int cnt = 0; cnt < updates_per_tick; cnt++) {
-                if (mobIndex >= mobsToDo.size()) {
-                    mobsToDo = null;
-                    break;
-                }
-                // Get next entity
-                LivingEntity le = mobsToDo.get(mobIndex);
-                mobIndex++;
-                
-                int i;
-                
-                /* See if entity is mob we care about */
-                String clsid = null;
-                if(gethandle != null) {
-                    try {
-                        clsid = gethandle.invoke(le).getClass().getName();
-                    } catch (Exception x) {
-                    }
-                }
-                
-                if(clsid == null)
-                    clsid = le.getClass().getName();
-                Integer idx = hlookup_cache.get(clsid);
-                if(idx == null) {
-                    for(i = 0; i < hostile_mobs.length; i++) {
-                        if((hostile_mobs[i].mobclass != null) && hostile_mobs[i].mobclass.isInstance(le)){
-                            if (hostile_mobs[i].entclsid == null) {
-                                break;
-                            }
-                            else if(gethandle != null) {
-                                Object obcentity = null;
-                                try {
-                                    obcentity = gethandle.invoke(le);
-                                } catch (Exception x) {
-                                }
-                                if ((hostile_mobs[i].entclass != null) && (obcentity != null) && (hostile_mobs[i].entclass.isInstance(obcentity))) {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    hlookup_cache.put(clsid, i);
-                }
-                else {
-                    i = idx;
-                }
-                if(i >= hostile_mobs.length) {
-                    continue;
-                }
-
-                Location loc = le.getLocation();
-                if(isHidden(loc)) continue;
-                double x = Math.round(loc.getX() / res) * res;
-                double y = Math.round(loc.getY() / res) * res;
-                double z = Math.round(loc.getZ() / res) * res;
-
-                String label = null;
-
-                // Leave outside of label, because it modifies i, which would be skipped if nolabels is set to true
-                if(hostile_mobs[i].mobid.equals("spider")) {    /* Check for jockey */
-                    if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
-                        i = find("spiderjockey", hostile_mobs);    /* Make jockey */
-                    }
-                }
-
-                if(!hnolabels) {
-                    if(label == null) {
-                        label = hostile_mobs[i].label;
-                    }
-    
-                    if (le.getCustomName() != null) {
-                        label = le.getCustomName() + " (" + label + ")";
-                    }
-
-                    if(hinc_coord) {
-                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                    }
-                }
-                else label = "";
-
-                if(i >= hostile_mobs.length) {
-                    continue;
-                }
-
-                /* See if we already have marker */
-                
-                Marker m = hostile_mobicons.remove(le.getEntityId());
-
-                if(m == null) { /* Not found?  Need new one */
-                    m = hset.createMarker("hostile_mob"+le.getEntityId(), label, curWorld.getName(), x, y, z, hostile_mobs[i].icon, false);
-                }
-                else {  /* Else, update position if needed */
-                    m.setLocation(curWorld.getName(), x, y, z);
-                    m.setLabel(label);
-                    m.setMarkerIcon(hostile_mobs[i].icon);
-                }
-                if (m != null) {
-                    newmap.put(le.getEntityId(), m);    /* Add to new map */
+            // check for chicken jockey
+            else if(ml_config.mobmap[i].mobid.equals("chicken")) {
+                if(le.getPassengers() != null && !le.getPassengers().isEmpty()) {
+                    i = find("chickenjockey", pconf.mobmap);
                 }
             }
-            getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, 1);
-        }
-    }
-
-    private class PassiveMobUpdate implements Runnable {
-        Map<Integer,Marker> newmap = new HashMap<Integer,Marker>(); /* Build new map */
-        ArrayList<World> worldsToDo = null;
-        List<LivingEntity> mobsToDo = null;
-        int mobIndex = 0;
-        World curWorld = null;
-        
-        public void run() {
-            if(stop || passive_mobs == null || passive_mobs.length == 0 || pset == null ) {
-                return;
-            }
-            // If needed, prime world list
-            if (worldsToDo == null) {
-                worldsToDo = new ArrayList<World>(getServer().getWorlds());
-            }
-            while (mobsToDo == null) {
-                if (worldsToDo.isEmpty()) {
-                    // Now, review old map - anything left is gone
-                    for(Marker oldm : passive_mobicons.values()) {
-                        oldm.deleteMarker();
-                    }
-                    // And replace with new map
-                    passive_mobicons = newmap;        
-                    // Schedule next run
-                    getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, new PassiveMobUpdate(), updperiod);
-                    return;
-                }
-                else {
-                    curWorld = worldsToDo.remove(0); // Get next world
-                    mobsToDo = curWorld.getLivingEntities();     // Get living entities
-                    mobIndex = 0;
-                    if ((mobsToDo != null) && mobsToDo.isEmpty()) {
-                        mobsToDo = null;
+            else if(ml_config.mobmap[i].mobid.equals("villager")) {
+                Villager v = (Villager)le;
+                Profession p = v.getProfession();
+                if(p != null) {
+                    switch(p) {
+                        case NONE:
+                            lbl = "Villager";
+                            break;
+                        case ARMORER:
+                            lbl = "Armorer";
+                            break;
+                        case BUTCHER:
+                            lbl = "Butcher";
+                            break;
+                        case CARTOGRAPHER:
+                            lbl = "Cartographer";
+                            break;
+                        case CLERIC:
+                            lbl = "Cleric";
+                            break;
+                        case FARMER:
+                            lbl = "Farmer";
+                            break;
+                        case FISHERMAN:
+                            lbl = "Fisherman";
+                            break;
+                        case FLETCHER:
+                            lbl = "Fletcher";
+                            break;
+                        case LEATHERWORKER:
+                            lbl = "Leatherworker";
+                            break;
+                        case LIBRARIAN:
+                            lbl = "Librarian";
+                            break;
+                        case MASON:
+                            lbl = "Mason";
+                            break;
+                        case NITWIT:
+                            lbl = "Nitwit";
+                            break;
+                        case SHEPHERD:
+                            lbl = "Shepherd";
+                            break;
+                        case TOOLSMITH:
+                            lbl = "Toolsmith";
+                            break;
+                        case WEAPONSMITH:
+                            lbl = "Weaponsmith";
+                            break;
                     }
                 }
             }
-            // Process up to limit per tick
-            for (int cnt = 0; cnt < updates_per_tick; cnt++) {
-                if (mobIndex >= mobsToDo.size()) {
-                    mobsToDo = null;
-                    break;
-                }
-                // Get next entity
-                LivingEntity le = mobsToDo.get(mobIndex);
-                mobIndex++;
-                
-                int i;
-                
-                /* See if entity is mob we care about */
-                String clsid = null;
-                if(gethandle != null) {
-                    try {
-                        clsid = gethandle.invoke(le).getClass().getName();
-                    } catch (Exception x) {
+            else if(ml_config.mobmap[i].mobid.equals("zombiehorse")
+                 || ml_config.mobmap[i].mobid.equals("skeletonhorse")) {    /* Check for rider */
+                List<Entity> passengers = le.getPassengers();
+                if(passengers != null && !passengers.isEmpty()) { /* Has passenger? */
+                    Entity e = passengers.get(0);
+                    if (e instanceof Player) {
+                        lbl = ml_config.mobmap[i].label + " (" + ((Player)e).getName() + ")";
                     }
                 }
-                
-                if(clsid == null)
-                    clsid = le.getClass().getName();
-                Integer idx = plookup_cache.get(clsid);
-                if(idx == null) {
-                    for(i = 0; i < passive_mobs.length; i++) {
-                        if((passive_mobs[i].mobclass != null) && passive_mobs[i].mobclass.isInstance(le)){
-                            if (passive_mobs[i].entclsid == null) {
-                                break;
-                            }
-                            else if(gethandle != null) {
-                                Object obcentity = null;
-                                try {
-                                    obcentity = gethandle.invoke(le);
-                                } catch (Exception x) {
-                                }
-                                if ((passive_mobs[i].entclass != null) && (obcentity != null) && (passive_mobs[i].entclass.isInstance(obcentity))) {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    plookup_cache.put(clsid, i);
-                }
-                else {
-                    i = idx;
-                }
-                if(i >= passive_mobs.length) {
-                    continue;
-                }
-
-                Location loc = le.getLocation();
-                if(isHidden(loc)) continue;
-                double x = Math.round(loc.getX() / res) * res;
-                double y = Math.round(loc.getY() / res) * res;
-                double z = Math.round(loc.getZ() / res) * res;
-
-                String label = null;
-
-                // Leave outside label if, because i is modified
-                if(passive_mobs[i].mobid.equals("chicken")) {    /* Check for jockey */
-                    if(le.getPassengers() != null && !le.getPassengers().isEmpty()) { /* Has passenger? */
-                        i = find("chickenjockey", passive_mobs);    /* Make jockey , passive_mobs*/
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("villager")) {
-                    Villager v = (Villager)le;
-                    Profession p = v.getProfession();
-                    if(p != null) {
-                        switch(p) {
-                            case NONE:
-                                label = "Villager";
-                                break;
-                            case ARMORER:
-                                label = "Armorer";
-                                break;
-                            case BUTCHER:
-                                label = "Butcher";
-                                break;
-                            case CARTOGRAPHER:
-                                label = "Cartographer";
-                                break;
-                            case CLERIC:
-                                label = "Cleric";
-                                break;
-                            case FARMER:
-                                label = "Farmer";
-                                break;
-                            case FISHERMAN:
-                                label = "Fisherman";
-                                break;
-                            case FLETCHER:
-                                label = "Fletcher";
-                                break;
-                            case LEATHERWORKER:
-                                label = "Leatherworker";
-                                break;
-                            case LIBRARIAN:
-                                label = "Librarian";
-                                break;
-                            case MASON:
-                                label = "Mason";
-                                break;
-                            case NITWIT:
-                                label = "Nitwit";
-                                break;
-                            case SHEPHERD:
-                                label = "Shepherd";
-                                break;
-                            case TOOLSMITH:
-                                label = "Toolsmith";
-                                break;
-                            case WEAPONSMITH:
-                                label = "Weaponsmith";
-                                break;
-                        }
-                    }
-                }
-                else if(passive_mobs[i].mobid.equals("zombiehorse")
-                	 || passive_mobs[i].mobid.equals("skeletonhorse")) {    /* Check for rider */
-                    List<Entity> passengers = le.getPassengers();
-                    if(passengers != null && !passengers.isEmpty()) { /* Has passenger? */
-                        Entity e = passengers.get(0);
-                        if (e instanceof Player) {
-                            label = passive_mobs[i].label + " (" + ((Player)e).getName() + ")";
-                        }
-                    }
-                }
-               /*
-                * Check if entity is tameable
-                * Append owner to label
-                * Requires all tamed mobids to start with "tamed"
-                * NOTE: Something caused index out of bounds here once, probably weird java/file cache issue
-                */
-               else if(le instanceof Tameable) {
-                   info("Is tameable: " + le.getClass().getName());
-                   Tameable tameable = (Tameable)le;
-                   if(tameable.isTamed()) {
-                       i = find("tamed" + passive_mobs[i].mobid, passive_mobs);
-                       AnimalTamer t = tameable.getOwner();
-                       if((t != null) && (t instanceof OfflinePlayer)) {
-                           label = passive_mobs[i].label + " (" + ((OfflinePlayer)t).getName() + ")";
-                       }
+            }
+           /*
+            * Check if entity is tameable
+            * Append owner to label
+            * Requires all tamed mobids to start with "tamed"
+            * NOTE: Something caused index out of bounds here once, probably weird java/file cache issue
+            */
+           else if(le instanceof Tameable) {
+               info("Is tameable: " + le.getClass().getName());
+               Tameable tameable = (Tameable)le;
+               if(tameable.isTamed()) {
+                   i = find("tamed" + ml_config.mobmap[i].mobid, pconf.mobmap);
+                   AnimalTamer t = tameable.getOwner();
+                   if((t != null) && (t instanceof OfflinePlayer)) {
+                       lbl = ml_config.mobmap[i].label + " (" + ((OfflinePlayer)t).getName() + ")";
                    }
                }
+            }
 
-                if(i >= passive_mobs.length) {
-                    continue;
+            if (i >= ml_config.mobmap.length) return new Object[] {"", i};
+
+            if(!ml_config.nolabels) {
+                if(lbl == null) {
+                    lbl = ml_config.mobmap[i].label;
                 }
 
-                if(!pnolabels) {
-                    if(label == null) {
-                        label = passive_mobs[i].label;
-                    }
-
-                    if (le.getCustomName() != null) {
-                        label = le.getCustomName() + " (" + label + ")";
-                    }
-
-                    if(pinc_coord) {
-                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                    }
+                if(le.getCustomName() != null) {
+                    lbl = le.getCustomName() + " (" + lbl + ")";
                 }
-                else label = "";
-                
-                /* See if we already have marker */
-                Marker m = passive_mobicons.remove(le.getEntityId());
 
-                //TODO: Put marker creation into function
-                if(m == null) { /* Not found?  Need new one */
-                    m = pset.createMarker("passive_mob"+le.getEntityId(), label, curWorld.getName(), x, y, z, passive_mobs[i].icon, false);
-                }
-                else {  /* Else, update position if needed */
-                    m.setLocation(curWorld.getName(), x, y, z);
-                    m.setLabel(label);
-                    m.setMarkerIcon(passive_mobs[i].icon);
-                }
-                if (m != null) {
-                    newmap.put(le.getEntityId(), m);    /* Add to new map */
+                if(ml_config.inc_coord) {
+                    lbl = lbl + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
                 }
             }
-            getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, 1);
+            else lbl = "";
+
+            return new Object[] {lbl, i};
         }
-    }
+        public void createUpdateMarker(int entityID, String label, double x, double y, double z, MarkerIcon icon) {
+            // Get existent marker
+            Marker m = ml_config.mobicons.remove(entityID);
 
-    private class VehicleUpdate implements Runnable {
-        Map<Integer,Marker> newmap = new HashMap<Integer,Marker>(); /* Build new map */
-        ArrayList<World> worldsToDo = null;
-        List<Entity> vehiclesToDo = null;
-        int vehiclesIndex = 0;
-        World curWorld = null;
-
-        public void run() {
-            if(stop || (vehicles == null) || (vehicles.length == 0) || (vset == null)) {
-                return;
+            // Create new marker
+            if(m == null) {
+                m = ml_config.set.createMarker(ml_config.identifier+entityID, label, curWorld.getName(), x, y, z, icon, false);
             }
-            // If needed, prime world list
-            if (worldsToDo == null) {
-                worldsToDo = new ArrayList<World>(getServer().getWorlds());
+            // Update marker
+            else {
+                m.setLocation(curWorld.getName(), x, y, z);
+                m.setLabel(label);
+                m.setMarkerIcon(icon);
             }
-            while (vehiclesToDo == null) {
-                if (worldsToDo.isEmpty()) {
-                    // Now, review old map - anything left is gone
-                    for(Marker oldm : vehicleicons.values()) {
-                        oldm.deleteMarker();
-                    }
-                    // And replace with new map
-                    vehicleicons = newmap;        
-                    // Schedule next run
-                    getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, new VehicleUpdate(), vupdperiod);
-                    return;
-                }
-                else {
-                    curWorld = worldsToDo.remove(0); // Get next world
-                    vehiclesToDo = new ArrayList<Entity>(curWorld.getEntitiesByClasses(org.bukkit.entity.Vehicle.class)); // Get vehicles
-                    vehiclesIndex = 0;
-                    if ((vehiclesToDo != null) && vehiclesToDo.isEmpty()) {
-                        vehiclesToDo = null;
-                    }
-                }
+            // Add marker to new map
+            if (m != null) {
+                newmap.put(entityID, m);
             }
-            // Process up to limit per tick
-            for (int cnt = 0; cnt < vupdates_per_tick; cnt++) {
-                if (vehiclesIndex >= vehiclesToDo.size()) {
-                    vehiclesToDo = null;
-                    break;
-                }
-                // Get next entity
-                Entity le = vehiclesToDo.get(vehiclesIndex);
-                vehiclesIndex++;
-                
-                int i;
-                /* See if entity is vehicle we care about */
-                String clsid = null;
-                if(gethandle != null) {
-                    try {
-                        clsid = gethandle.invoke(le).getClass().getName();
-                    } catch (Exception x) {
-                    }
-                }
-                if(clsid == null)
-                    clsid = le.getClass().getName();
-                Integer idx = vlookup_cache.get(clsid);
-                if(idx == null) {
-                    for(i = 0; i < vehicles.length; i++) {
-                        if((vehicles[i].mobclass != null) && vehicles[i].mobclass.isInstance(le)){
-                            if (vehicles[i].entclsid == null) {
-                                break;
-                            }
-                            else if(gethandle != null) {
-                                Object obcentity = null;
-                                try {
-                                    obcentity = gethandle.invoke(le);
-                                } catch (Exception x) {
-                                }
-                                if ((vehicles[i].entclass != null) && (obcentity != null) && (vehicles[i].entclass.isInstance(obcentity))) {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    vlookup_cache.put(clsid,  i);
-                }
-                else {
-                    i = idx;
-                }
-                if(i >= vehicles.length) {
-                    continue;
-                }
-                
-                Location loc = le.getLocation();
-                if(curWorld.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4) == false) {
-                    continue;
-                }
-                if(isHidden(loc)) continue;
-                double x = Math.round(loc.getX() / res) * res;
-                double y = Math.round(loc.getY() / res) * res;
-                double z = Math.round(loc.getZ() / res) * res;
-
-                String label = null;
-
-                if(!vnolabels) {
-                    if(label == null) {
-                        label = vehicles[i].label;
-                    }
-
-                    if(vinc_coord) {
-                        label = label + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                    }
-                }
-                else label = "";
-
-                if(i >= vehicles.length) {
-                    continue;
-                }
-                
-                /* See if we already have marker */
-                Marker m = vehicleicons.remove(le.getEntityId());
-
-                if(m == null) { /* Not found?  Need new one */
-                    m = vset.createMarker("vehicle"+le.getEntityId(), label, curWorld.getName(), x, y, z, vehicles[i].icon, false);
-                }
-                else {  /* Else, update position if needed */
-                    m.setLocation(curWorld.getName(), x, y, z);
-                    m.setLabel(label);
-                    m.setMarkerIcon(vehicles[i].icon);
-                }
-                newmap.put(le.getEntityId(), m);    /* Add to new map */
-            }
-            getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, 1);
         }
     }
 
@@ -940,6 +550,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 cachedRelease = version;
                 int compare = compareVersions(curVersion, version);
                 
+                //FIXME: higher dev build notifies about earlier release
                 if(compare != -1) {
                     if(compare == 0) {
                         if(isdev) {
@@ -1122,7 +733,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
     }
 
     private void activate() {
-        /* look up the getHandle method for CraftEntity */
+        // Look up the getHandle method for CraftEntity
         try {
             Class<?> cls = Class.forName(mapClassName("org.bukkit.craftbukkit.entity.CraftEntity"));
             gethandle = cls.getMethod("getHandle");
@@ -1134,45 +745,23 @@ public class DynmapMobsPlugin extends JavaPlugin {
             severe("Unable to locate CraftEntity.getHandle() - cannot process most Mo'Creatures mobs");
         }
         
-        /* Now, get markers API */
+        // Now, get markers API
         markerapi = api.getMarkerAPI();
         if(markerapi == null) {
             severe("Error loading Dynmap marker API!");
             return;
         }
-        /* Load configuration */
+        // Load configuration
         if(reload) {
             reloadConfig();
-            if(mset != null)  {
-                mset.deleteMarkerSet();
-                mset = null;
-            }
-            if(hset != null)  {
-                hset.deleteMarkerSet();
-                hset = null;
-            }
-            if(pset != null)  {
-                pset.deleteMarkerSet();
-                pset = null;
-            }
-            if(vset != null)  {
-                vset.deleteMarkerSet();
-                vset = null;
-            }
-            mocreat_mobicons.clear();
-            hostile_mobicons.clear();
-            passive_mobicons.clear();
-            vehicleicons.clear();
-            mlookup_cache.clear();
-            hlookup_cache.clear();
-            plookup_cache.clear();
-            vlookup_cache.clear();
+
+            reset();
         }
         else {
             reload = true;
         }
         this.saveDefaultConfig();
-        FileConfiguration cfg = getConfig();
+        cfg = getConfig();
         cfg.options().copyDefaults(true);   /* Load defaults, if needed */
         this.saveConfig();  /* Save updates, if needed */
 
@@ -1188,268 +777,28 @@ public class DynmapMobsPlugin extends JavaPlugin {
         // Update period
         double per = cfg.getDouble("update.period", 5.0);
         if(per < 2.0) per = 2.0;
-        updperiod = (long)(per*20.0);
+        long updperiod = (long)(per*20.0);
+        mconf.period = updperiod;
+        hconf.period = updperiod;
+        pconf.period = updperiod;
         // Vehicle update period
         double vper = cfg.getDouble("update.vehicleperiod", 10.0);
         if(vper < 2.0) vper = 2.0;
-        vupdperiod = (long)(vper*20.0);
+        vconf.period = (long)(vper*20.0) / 3;
 
-        updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
-        vupdates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
+        int updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
+        mconf.updates_per_tick = updates_per_tick;
+        hconf.updates_per_tick = updates_per_tick;
+        pconf.updates_per_tick = updates_per_tick;
+        vconf.updates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
         stop = false;
 
-        mtinyicons = cfg.getBoolean("mocreatlayer.tinyicons", false);
-        mnolabels = cfg.getBoolean("mocreatlayer.nolabels", false);
-        minc_coord = cfg.getBoolean("mocreatlayer.inc-coord", false);
+        loadConfig("mocreatlayer", "mocreat_mobs", mconf, config_mocreat_mobs);
+        loadConfig("hostilelayer", "hostile_mobs", hconf, config_hostile_mobs);
+        loadConfig("passivelayer", "passive_mobs", pconf, config_passive_mobs);
+        loadConfig("vehiclelayer", "vehicles", vconf, config_vehicles);
 
-        htinyicons = cfg.getBoolean("hostilelayer.tinyicons", false);
-        hnolabels = cfg.getBoolean("hostilelayer.nolabels", false);
-        hinc_coord = cfg.getBoolean("hostilelayer.inc-coord", false);
-
-        ptinyicons = cfg.getBoolean("passivelayer.tinyicons", false);
-        pnolabels = cfg.getBoolean("passivelayer.nolabels", false);
-        pinc_coord = cfg.getBoolean("passivelayer.inc-coord", false);
-
-        vtinyicons = cfg.getBoolean("vehiclelayer.tinyicons", false);
-        vnolabels = cfg.getBoolean("vehiclelayer.nolabels", false);
-        vinc_coord = cfg.getBoolean("vehiclelayer.inc-coord", false);
-        
-        /* Now, check which mo'creatures mobs are enabled */
-        Set<Class<Entity>> clsset = new HashSet<Class<Entity>>();
-        int cnt = 0;
-        for(int i = 0; i < config_mocreat_mobs.length; i++) {
-            config_mocreat_mobs[i].init();
-            config_mocreat_mobs[i].enabled = cfg.getBoolean("mocreat_mobs." + config_mocreat_mobs[i].mobid, false);
-            config_mocreat_mobs[i].icon = markerapi.getMarkerIcon("mocreat_mobs." + config_mocreat_mobs[i].mobid);
-            InputStream in = null;
-            if(mtinyicons)
-                in = getClass().getResourceAsStream("/8x8/" + config_mocreat_mobs[i].mobid + ".png");
-            if(in == null)
-                in = getClass().getResourceAsStream("/" + config_mocreat_mobs[i].mobid + ".png");
-            if(in != null) {
-                if(config_mocreat_mobs[i].icon == null)
-                    config_mocreat_mobs[i].icon = markerapi.createMarkerIcon("mocreat_mobs." + config_mocreat_mobs[i].mobid, config_mocreat_mobs[i].label, in);
-                else    /* Update image */
-                    config_mocreat_mobs[i].icon.setMarkerIconImage(in);
-            }
-            if(config_mocreat_mobs[i].icon == null) {
-                config_mocreat_mobs[i].icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
-            }
-            if(config_mocreat_mobs[i].enabled) {
-                cnt++;
-            }
-        }
-        /* Make list of just enabled mobs */
-        mocreat_mobs = new MobMapping[cnt];
-        for(int i = 0, j = 0; i < config_mocreat_mobs.length; i++) {
-            if(config_mocreat_mobs[i].enabled) {
-                mocreat_mobs[j] = config_mocreat_mobs[i];
-                j++;
-                clsset.add(config_mocreat_mobs[i].mobclass);
-            }
-        }
-
-        /* Now, add marker set for mobs (make it transient) */
-        if(mocreat_mobs.length > 0) {
-            mset = markerapi.getMarkerSet("mocreat_mobs.markerset");
-            if(mset == null)
-                mset = markerapi.createMarkerSet("mocreat_mobs.markerset", cfg.getString("mocreatlayer.name", "Mo'Creatures Mobs"), null, false);
-            else
-                mset.setMarkerSetLabel(cfg.getString("mocreatlayer.name", "Mo'Creatures Mobs"));
-            if(mset == null) {
-                severe("Error creating marker set");
-                return;
-            }
-            mset.setLayerPriority(cfg.getInt("mocreatlayer.layerprio", 10));
-            mset.setHideByDefault(cfg.getBoolean("mocreatlayer.hidebydefault", false));
-            int minzoom = cfg.getInt("mocreatlayer.minzoom", 0);
-            if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
-                mset.setMinZoom(minzoom);
-            getServer().getScheduler().scheduleSyncDelayedTask(this, new MoCreatMobUpdate(), updperiod);
-            info("Layer for mo'creatures mobs enabled");
-        }
-        else {
-            info("Layer for mo'creatures mobs disabled");
-        }
-
-
-
-        /* Now, check which hostile mobs are enabled */
-        clsset = new HashSet<Class<Entity>>();
-        cnt = 0;
-        for(int i = 0; i < config_hostile_mobs.length; i++) {
-            config_hostile_mobs[i].init();
-            config_hostile_mobs[i].enabled = cfg.getBoolean("hostile_mobs." + config_hostile_mobs[i].mobid, false);
-            config_hostile_mobs[i].icon = markerapi.getMarkerIcon("hostile_mobs." + config_hostile_mobs[i].mobid);
-            InputStream in = null;
-            if(htinyicons)
-                in = getClass().getResourceAsStream("/8x8/" + config_hostile_mobs[i].mobid + ".png");
-            if(in == null)
-                in = getClass().getResourceAsStream("/" + config_hostile_mobs[i].mobid + ".png");
-            if(in != null) {
-                if(config_hostile_mobs[i].icon == null)
-                    config_hostile_mobs[i].icon = markerapi.createMarkerIcon("hostile_mobs." + config_hostile_mobs[i].mobid, config_hostile_mobs[i].label, in);
-                else    /* Update image */
-                    config_hostile_mobs[i].icon.setMarkerIconImage(in);
-            }
-            if(config_hostile_mobs[i].icon == null) {
-                config_hostile_mobs[i].icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
-            }
-            if(config_hostile_mobs[i].enabled) {
-                cnt++;
-            }
-        }
-        /* Make list of just enabled mobs */
-        hostile_mobs = new MobMapping[cnt];
-        for(int i = 0, j = 0; i < config_hostile_mobs.length; i++) {
-            if(config_hostile_mobs[i].enabled) {
-                hostile_mobs[j] = config_hostile_mobs[i];
-                j++;
-                clsset.add(config_hostile_mobs[i].mobclass);
-            }
-        }
-
-        /* Now, add marker set for mobs (make it transient) */
-        if(hostile_mobs.length > 0) {
-            hset = markerapi.getMarkerSet("hostile_mobs.markerset");
-            if(hset == null)
-                hset = markerapi.createMarkerSet("hostile_mobs.markerset", cfg.getString("hostilelayer.name", "Mo'Creatures Mobs"), null, false);
-            else
-                hset.setMarkerSetLabel(cfg.getString("hostilelayer.name", "Mo'Creatures Mobs"));
-            if(hset == null) {
-                severe("Error creating marker set");
-                return;
-            }
-            hset.setLayerPriority(cfg.getInt("hostilelayer.layerprio", 10));
-            hset.setHideByDefault(cfg.getBoolean("hostilelayer.hidebydefault", false));
-            int minzoom = cfg.getInt("hostilelayer.minzoom", 0);
-            if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
-                hset.setMinZoom(minzoom);
-            getServer().getScheduler().scheduleSyncDelayedTask(this, new HostileMobUpdate(), updperiod);
-            info("Layer for hostile mobs enabled");
-        }
-        else {
-            info("Layer for hostile mobs disabled");
-        }
-
-        /* Now, check which passive mobs are enabled */
-        clsset = new HashSet<Class<Entity>>();
-        cnt = 0;
-        for(int i = 0; i < config_passive_mobs.length; i++) {
-            config_passive_mobs[i].init();
-            config_passive_mobs[i].enabled = cfg.getBoolean("passive_mobs." + config_passive_mobs[i].mobid, false);
-            config_passive_mobs[i].icon = markerapi.getMarkerIcon("passive_mobs." + config_passive_mobs[i].mobid);
-            InputStream in = null;
-            if(ptinyicons)
-                in = getClass().getResourceAsStream("/8x8/" + config_passive_mobs[i].mobid + ".png");
-            if(in == null)
-                in = getClass().getResourceAsStream("/" + config_passive_mobs[i].mobid + ".png");
-            if(in != null) {
-                if(config_passive_mobs[i].icon == null)
-                    config_passive_mobs[i].icon = markerapi.createMarkerIcon("passive_mobs." + config_passive_mobs[i].mobid, config_passive_mobs[i].label, in);
-                else    /* Update image */
-                    config_passive_mobs[i].icon.setMarkerIconImage(in);
-            }
-            if(config_passive_mobs[i].icon == null) {
-                config_passive_mobs[i].icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
-            }
-            if(config_passive_mobs[i].enabled) {
-                cnt++;
-            }
-        }
-        /* Make list of just enabled mobs */
-        passive_mobs = new MobMapping[cnt];
-        for(int i = 0, j = 0; i < config_passive_mobs.length; i++) {
-            if(config_passive_mobs[i].enabled) {
-                passive_mobs[j] = config_passive_mobs[i];
-                j++;
-                clsset.add(config_passive_mobs[i].mobclass);
-            }
-        }
-
-        /* Now, add marker set for mobs (make it transient) */
-        if(passive_mobs.length > 0) {
-            pset = markerapi.getMarkerSet("passive_mobs.markerset");
-            if(pset == null)
-                pset = markerapi.createMarkerSet("passive_mobs.markerset", cfg.getString("passivelayer.name", "Mo'Creatures Mobs"), null, false);
-            else
-                pset.setMarkerSetLabel(cfg.getString("passivelayer.name", "Mo'Creatures Mobs"));
-            if(pset == null) {
-                severe("Error creating marker set");
-                return;
-            }
-            pset.setLayerPriority(cfg.getInt("passivelayer.layerprio", 10));
-            pset.setHideByDefault(cfg.getBoolean("passivelayer.hidebydefault", false));
-            int minzoom = cfg.getInt("passivelayer.minzoom", 0);
-            if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
-                pset.setMinZoom(minzoom);
-            getServer().getScheduler().scheduleSyncDelayedTask(this, new PassiveMobUpdate(), updperiod);
-            info("Layer for passive mobs enabled");
-        }
-        else {
-            info("Layer for passive mobs disabled");
-        }
-
-
-        /* Now, check which vehicles are enabled */
-        clsset = new HashSet<Class<Entity>>();
-        cnt = 0;
-        for(int i = 0; i < config_vehicles.length; i++) {
-            config_vehicles[i].init();
-            config_vehicles[i].enabled = cfg.getBoolean("vehicles." + config_vehicles[i].mobid, false);
-            config_vehicles[i].icon = markerapi.getMarkerIcon("vehicles." + config_vehicles[i].mobid);
-            InputStream in = null;
-            if(vtinyicons)
-                in = getClass().getResourceAsStream("/8x8/" + config_vehicles[i].mobid + ".png");
-            if(in == null)
-                in = getClass().getResourceAsStream("/" + config_vehicles[i].mobid + ".png");
-            if(in != null) {
-                if(config_vehicles[i].icon == null)
-                    config_vehicles[i].icon = markerapi.createMarkerIcon("vehicles." + config_vehicles[i].mobid, config_vehicles[i].label, in);
-                else    /* Update image */
-                    config_vehicles[i].icon.setMarkerIconImage(in);
-            }
-            if(config_vehicles[i].icon == null) {
-                config_vehicles[i].icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
-            }
-            if(config_vehicles[i].enabled) {
-                cnt++;
-            }
-        }
-        /* Make list of just enabled vehicles */
-        vehicles = new MobMapping[cnt];
-        for(int i = 0, j = 0; i < config_vehicles.length; i++) {
-            if(config_vehicles[i].enabled) {
-                vehicles[j] = config_vehicles[i];
-                j++;
-                clsset.add(config_vehicles[i].mobclass);
-            }
-        }
-        /* Now, add marker set for vehicles (make it transient) */
-        if(vehicles.length > 0) {
-            vset = markerapi.getMarkerSet("vehicles.markerset");
-            if(vset == null)
-                vset = markerapi.createMarkerSet("vehicles.markerset", cfg.getString("vehiclelayer.name", "Vehicles"), null, false);
-            else
-                vset.setMarkerSetLabel(cfg.getString("vehiclelayer.name", "Vehicles"));
-            if(vset == null) {
-                severe("Error creating marker set");
-                return;
-            }
-            vset.setLayerPriority(cfg.getInt("vehiclelayer.layerprio", 10));
-            vset.setHideByDefault(cfg.getBoolean("vehiclelayer.hidebydefault", false));
-            int minzoom = cfg.getInt("vehiclelayer.minzoom", 0);
-            if(minzoom > 0) /* Don't call if non-default - lets us work with pre-0.28 dynmap */
-                vset.setMinZoom(minzoom);
-            //TODO: Find out why period is divided by 3 here
-            getServer().getScheduler().scheduleSyncDelayedTask(this, new VehicleUpdate(), vupdperiod / 3);
-            info("Layer for vehicles enabled");
-        }
-        else {
-            info("Layer for vehicles disabled");
-        }
-
-        /* Check for updates */
+        // Update Check
         if(cfg.getBoolean("general.update-check", true)) {
             getServer().getScheduler().scheduleSyncDelayedTask(this, new UpdateCheck());
             info("Update check enabled");
@@ -1459,32 +808,104 @@ public class DynmapMobsPlugin extends JavaPlugin {
         info("Activated");
     }
 
+    public void loadConfig(String layer, String ident, MobLayerConfig conf, MobMapping conf_mobs[]) {
+        conf.tinyicons = cfg.getBoolean(layer + ".tinyicons", false);
+        conf.nolabels = cfg.getBoolean(layer + ".nolabels", false);
+        conf.inc_coord = cfg.getBoolean(layer + ".inc-coord", false);
+
+        // Check which entities are enabled
+        Set<Class<Entity>> clsset = new HashSet<Class<Entity>>();
+        int cnt = 0;
+        for(int i = 0; i < conf_mobs.length; i++) {
+            conf_mobs[i].init();
+            conf_mobs[i].enabled = cfg.getBoolean(ident + "." + conf_mobs[i].mobid, false);
+            conf_mobs[i].icon = markerapi.getMarkerIcon(ident + "." + conf_mobs[i].mobid);
+            InputStream in = null;
+            if(conf.tinyicons)
+                in = getClass().getResourceAsStream("/8x8/" + conf_mobs[i].mobid + ".png");
+            if(in == null)
+                in = getClass().getResourceAsStream("/" + conf_mobs[i].mobid + ".png");
+            if(in != null) {
+                if(conf_mobs[i].icon == null)
+                    conf_mobs[i].icon = markerapi.createMarkerIcon(ident + "." + conf_mobs[i].mobid, conf_mobs[i].label, in);
+                else    // Update image
+                    conf_mobs[i].icon.setMarkerIconImage(in);
+            }
+            if(conf_mobs[i].icon == null) {
+                conf_mobs[i].icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
+            }
+            if(conf_mobs[i].enabled) {
+                cnt++;
+            }
+        }
+        // Make list of just enabled mobs */
+        conf.mobmap = new MobMapping[cnt];
+        for(int i = 0, j = 0; i < conf_mobs.length; i++) {
+            if(conf_mobs[i].enabled) {
+                conf.mobmap[j] = conf_mobs[i];
+                j++;
+                clsset.add(conf_mobs[i].mobclass);
+            }
+        }
+
+        // Now, add marker set for mobs (make it transient)
+        if(conf.mobmap.length > 0) {
+            conf.set = markerapi.getMarkerSet(ident + ".markerset");
+            if(conf.set == null)
+                conf.set = markerapi.createMarkerSet(ident + ".markerset", cfg.getString(layer + ".name", "NoName"), null, false);
+            else
+                conf.set.setMarkerSetLabel(cfg.getString(layer + ".name", "NoName"));
+            if(conf.set == null) {
+                severe("Error creating marker set");
+                return;
+            }
+            conf.set.setLayerPriority(cfg.getInt(layer + ".layerprio", 10));
+            conf.set.setHideByDefault(cfg.getBoolean(layer + ".hidebydefault", false));
+            int minzoom = cfg.getInt(layer + ".minzoom", 0);
+            if(minzoom > 0) // Don't call if non-default - lets us work with pre-0.28 dynmap
+                conf.set.setMinZoom(minzoom);
+            getServer().getScheduler().scheduleSyncDelayedTask(this, new MobUpdate(conf), conf.period);
+            info(layer + " enabled");
+        }
+        else {
+            info(layer + " disabled");
+        }
+    }
+
     public void onDisable() {
-        if(mset != null) {
-            mset.deleteMarkerSet();
-            mset = null;
-        }
-        if(hset != null) {
-            hset.deleteMarkerSet();
-            hset = null;
-        }
-        if(pset != null) {
-            pset.deleteMarkerSet();
-            pset = null;
-        }
-        if(vset != null) {
-            vset.deleteMarkerSet();
-            vset = null;
-        }
-        mocreat_mobicons.clear();
-        hostile_mobicons.clear();
-        passive_mobicons.clear();
-        vehicleicons.clear();
-        mlookup_cache.clear();
-        hlookup_cache.clear();
-        plookup_cache.clear();
-        vlookup_cache.clear();
+        reset();
         stop = true;
+    }
+
+    public void reset() {
+        //TODO: A clear function could be attached to class directly
+        if (mconf.set != null) {
+            mconf.set.deleteMarkerSet();
+            mconf.set = null;
+        }
+        if (hconf.set != null) {
+            hconf.set.deleteMarkerSet();
+            hconf.set = null;
+        }
+        if (pconf.set != null) {
+            pconf.set.deleteMarkerSet();
+            pconf.set = null;
+        }
+
+        if (vconf.set != null) {
+            vconf.set.deleteMarkerSet();
+            vconf.set = null;
+        }
+
+        mconf.mobicons.clear();
+        hconf.mobicons.clear();
+        pconf.mobicons.clear();
+        vconf.mobicons.clear();
+
+        mconf.cache.clear();
+        hconf.cache.clear();
+        pconf.cache.clear();
+        vconf.cache.clear();
     }
 
 }
