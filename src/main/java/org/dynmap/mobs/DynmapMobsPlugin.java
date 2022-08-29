@@ -276,6 +276,15 @@ public class DynmapMobsPlugin extends JavaPlugin {
             this.isVehicle = isVehicle;
         }
 
+        public void clear() {
+            if (set != null) {
+                set.deleteMarkerSet();
+                set = null;
+            }
+            mobicons.clear();
+            cache.clear();
+        }
+
     }
     private class MobUpdate implements Runnable {
         Map<Integer,Marker> newmap = new HashMap<Integer,Marker>();
@@ -291,7 +300,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
         
         public void run() {
             if(stop || ml_config.mobmap == null || ml_config.mobmap.length == 0 || ml_config.set == null) {
-                info("Something is null or 0");
                 return;
             }
 
@@ -300,7 +308,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             }
             while(mobsToDo == null) {
                 if(worldsToDo.isEmpty()) {
-                    info("No worlds");
                     //Review old map
                     for(Marker oldm : ml_config.mobicons.values()) {
                         oldm.deleteMarker();
@@ -477,7 +484,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
             * NOTE: Something caused index out of bounds here once, probably weird java/file cache issue
             */
            else if(le instanceof Tameable) {
-               info("Is tameable: " + le.getClass().getName());
                Tameable tameable = (Tameable)le;
                if(tameable.isTamed()) {
                    i = find("tamed" + ml_config.mobmap[i].mobid, pconf.mobmap);
@@ -838,7 +844,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 cnt++;
             }
         }
-        // Make list of just enabled mobs */
+        // Make list of just enabled mobs
         conf.mobmap = new MobMapping[cnt];
         for(int i = 0, j = 0; i < conf_mobs.length; i++) {
             if(conf_mobs[i].enabled) {
@@ -878,34 +884,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
     }
 
     public void reset() {
-        //TODO: A clear function could be attached to class directly
-        if (mconf.set != null) {
-            mconf.set.deleteMarkerSet();
-            mconf.set = null;
-        }
-        if (hconf.set != null) {
-            hconf.set.deleteMarkerSet();
-            hconf.set = null;
-        }
-        if (pconf.set != null) {
-            pconf.set.deleteMarkerSet();
-            pconf.set = null;
-        }
-
-        if (vconf.set != null) {
-            vconf.set.deleteMarkerSet();
-            vconf.set = null;
-        }
-
-        mconf.mobicons.clear();
-        hconf.mobicons.clear();
-        pconf.mobicons.clear();
-        vconf.mobicons.clear();
-
-        mconf.cache.clear();
-        hconf.cache.clear();
-        pconf.cache.clear();
-        vconf.cache.clear();
+        mconf.clear();
+        hconf.clear();
+        pconf.clear();
+        vconf.clear();
     }
 
 }
