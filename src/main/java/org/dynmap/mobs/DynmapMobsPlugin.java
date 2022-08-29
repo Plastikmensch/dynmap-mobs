@@ -34,7 +34,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
     MobLayerConfig hconf = new MobLayerConfig("hostile_mob");
     MobLayerConfig pconf = new MobLayerConfig("passive_mob");
     MobLayerConfig vconf = new MobLayerConfig("vehicle", true);
-    double res; /* Position resolution */
+    double res; // Position resolution
     int hideifundercover;
     int hideifshadow;
     boolean stop;
@@ -59,7 +59,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
         return n;
     }
 
-    /* Mapping of mobs to icons */
+    // Mapping of mobs to icons
     private static class MobMapping {
         String mobid;
         boolean enabled;
@@ -133,6 +133,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
         new MobMapping("ostrich", "org.bukkit.entity.Animals", "Ostrich", "net.minecraft.server.MoCEntityOstrich")
     };
 
+    //TODO: check validity of "Must be after x" comments. Probably was true before refactor of find(), but order of entities of shared class does matter
     private MobMapping config_hostile_mobs[] = {
         // Standard hostile
         new MobMapping("elderguardian", "org.bukkit.entity.ElderGuardian", "Elder Guardian"),
@@ -150,15 +151,15 @@ public class DynmapMobsPlugin extends JavaPlugin {
         new MobMapping("drowned", "org.bukkit.entity.Drowned", "Drowned"),
         new MobMapping("phantom", "org.bukkit.entity.Phantom", "Phantom"),
         new MobMapping("zombiepigman", "org.bukkit.entity.PigZombie", "Zombified Piglin"),
-        new MobMapping("zombie", "org.bukkit.entity.Zombie", "Zombie"), /* Must be last zombie type */
+        new MobMapping("zombie", "org.bukkit.entity.Zombie", "Zombie"), // Must be last zombie type
         new MobMapping("enderman", "org.bukkit.entity.Enderman", "Enderman"),
         new MobMapping("cavespider", "org.bukkit.entity.CaveSpider", "Cave Spider"),
-        new MobMapping("spider", "org.bukkit.entity.Spider", "Spider"), /* Must be last spider type */
-        new MobMapping("spiderjockey", "org.bukkit.entity.Spider", "Spider Jockey"), /* Must be just after spider */
+        new MobMapping("spider", "org.bukkit.entity.Spider", "Spider"), // Must be last spider type
+        new MobMapping("spiderjockey", "org.bukkit.entity.Spider", "Spider Jockey"), // Must be just after spider
         new MobMapping("silverfish", "org.bukkit.entity.Silverfish", "Silverfish"),
         new MobMapping("blaze", "org.bukkit.entity.Blaze", "Blaze"),
         new MobMapping("magmacube", "org.bukkit.entity.MagmaCube", "Magma Cube"),
-        new MobMapping("slime", "org.bukkit.entity.Slime", "Slime"), /* Must be last slime type */
+        new MobMapping("slime", "org.bukkit.entity.Slime", "Slime"), // Must be last slime type
         new MobMapping("enderdragon", "org.bukkit.entity.EnderDragon", "Ender Dragon"),
         new MobMapping("wither", "org.bukkit.entity.Wither", "Wither"),
         new MobMapping("witch", "org.bukkit.entity.Witch", "Witch"),
@@ -187,10 +188,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
         new MobMapping("sheep", "org.bukkit.entity.Sheep", "Sheep"),
         new MobMapping("cow", "org.bukkit.entity.Cow", "Cow"),
         new MobMapping("chicken", "org.bukkit.entity.Chicken", "Chicken"),
-        new MobMapping("chickenjockey", "org.bukkit.entity.Chicken", "Chicken Jockey"), /* Must be just after chicken */
+        new MobMapping("chickenjockey", "org.bukkit.entity.Chicken", "Chicken Jockey"), // Must be just after chicken
         new MobMapping("squid", "org.bukkit.entity.Squid", "Squid"),
         new MobMapping("wolf", "org.bukkit.entity.Wolf", "Wolf"),
-        new MobMapping("tamedwolf", "org.bukkit.entity.Wolf", "Wolf"), /* Must be just after wolf */
+        new MobMapping("tamedwolf", "org.bukkit.entity.Wolf", "Wolf"), // Must be just after wolf
         new MobMapping("mooshroom", "org.bukkit.entity.MushroomCow", "Mooshroom"),
         new MobMapping("snowgolem", "org.bukkit.entity.Snowman", "Snow Golem"),
         new MobMapping("ocelot", "org.bukkit.entity.Ocelot", "Ocelot"),
@@ -468,9 +469,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 }
             }
             else if(ml_config.mobmap[i].mobid.equals("zombiehorse")
-                 || ml_config.mobmap[i].mobid.equals("skeletonhorse")) {    /* Check for rider */
+                 || ml_config.mobmap[i].mobid.equals("skeletonhorse")) {
                 List<Entity> passengers = le.getPassengers();
-                if(passengers != null && !passengers.isEmpty()) { /* Has passenger? */
+                if(passengers != null && !passengers.isEmpty()) {
                     Entity e = passengers.get(0);
                     if (e instanceof Player) {
                         lbl = ml_config.mobmap[i].label + " (" + ((Player)e).getName() + ")";
@@ -540,11 +541,11 @@ public class DynmapMobsPlugin extends JavaPlugin {
     private class UpdateCheck implements Runnable {
         private final String updateURL = "https://api.github.com/repos/Plastikmensch/dynmap-mobs/releases/latest";
         private final String downloadURL = "https://github.com/Plastikmensch/dynmap-mobs/releases/latest";
-        /* Delay between update checks in server ticks. 25h by default. */
+        // Delay between update checks in server ticks. 25h by default.
         private final long delay = 1800000L;
-        /* ETag used for conditional requests */
+        // ETag used for conditional requests
         private String etag = null;
-        /* Cached release tag */
+        // Cached release tag
         private String cachedRelease = null;
         
         /**
@@ -701,17 +702,18 @@ public class DynmapMobsPlugin extends JavaPlugin {
     public void onEnable() {
         info("initializing");
         PluginManager pm = getServer().getPluginManager();
-        /* Get dynmap */
+        // Get dynmap
         dynmap = pm.getPlugin("dynmap");
         if(dynmap == null) {
             severe("Cannot find dynmap!");
             return;
         }
-        api = (DynmapAPI)dynmap; /* Get API */
+        // Get API
+        api = (DynmapAPI)dynmap;
 
         getServer().getPluginManager().registerEvents(new OurServerListener(), this);        
 
-        /* If enabled, activate */
+        // If dynmap is enabled, activate
         if(dynmap.isEnabled())
             activate();
 
@@ -720,10 +722,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
     private static String getNMSPackage() {
         if (nmspackage == null) {
             Server srv = Bukkit.getServer();
-            /* Get getHandle() method */
+            // Get getHandle() method
             try {
                 Method m = srv.getClass().getMethod("getHandle");
-                Object scm = m.invoke(srv); /* And use it to get SCM (nms object) */
+                Object scm = m.invoke(srv); // And use it to get SCM (nms object)
                 nmspackage = scm.getClass().getPackage().getName();
             } catch (Exception x) {
                 nmspackage = "net.minecraft.server";
@@ -768,8 +770,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
         }
         this.saveDefaultConfig();
         cfg = getConfig();
-        cfg.options().copyDefaults(true);   /* Load defaults, if needed */
-        this.saveConfig();  /* Save updates, if needed */
+        // Load defaults, if needed
+        cfg.options().copyDefaults(true);
+        // Save updates, if needed
+        this.saveConfig();
 
         // Check if build is dev build
         isdev = this.getDescription().getVersion().contains("-");
@@ -799,10 +803,10 @@ public class DynmapMobsPlugin extends JavaPlugin {
         vconf.updates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
         stop = false;
 
-        loadConfig("mocreatlayer", "mocreat_mobs", mconf, config_mocreat_mobs);
-        loadConfig("hostilelayer", "hostile_mobs", hconf, config_hostile_mobs);
-        loadConfig("passivelayer", "passive_mobs", pconf, config_passive_mobs);
-        loadConfig("vehiclelayer", "vehicles", vconf, config_vehicles);
+        loadConfig(mconf, config_mocreat_mobs);
+        loadConfig(hconf, config_hostile_mobs);
+        loadConfig(pconf, config_passive_mobs);
+        loadConfig(vconf, config_vehicles);
 
         // Update Check
         if(cfg.getBoolean("general.update-check", true)) {
@@ -814,7 +818,11 @@ public class DynmapMobsPlugin extends JavaPlugin {
         info("Activated");
     }
 
-    public void loadConfig(String layer, String ident, MobLayerConfig conf, MobMapping conf_mobs[]) {
+    public void loadConfig(MobLayerConfig conf, MobMapping conf_mobs[]) {
+        // Derive ident and layer from conf.identifier
+        String ident = conf.identifier + "s";
+        String layer = conf.identifier.split("_")[0] + "layer";
+        // Set layer config
         conf.tinyicons = cfg.getBoolean(layer + ".tinyicons", false);
         conf.nolabels = cfg.getBoolean(layer + ".nolabels", false);
         conf.inc_coord = cfg.getBoolean(layer + ".inc-coord", false);
