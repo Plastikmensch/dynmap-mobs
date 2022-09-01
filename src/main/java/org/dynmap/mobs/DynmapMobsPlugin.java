@@ -667,12 +667,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     Matcher latest = semver.matcher(newVersion);
 
                     if(current.find() && latest.find()) {
-                        //FIXME: returns 2 if current version 2.0.0 and latest 1.9.1, because 2 !< 1 and 0 < 9
-                        // Proposed fix: if(Integer.parseInt(current.group(i)) != Integer.parseInt(latest.group(i))) return (Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) ? i : -1;
                         for (int i=1; i<=3;i++) {
-                            if(Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) return i;
+                            if(Integer.parseInt(current.group(i)) != Integer.parseInt(latest.group(i))) return (Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) ? i : -1;
                         }
-                        return -1;
                     }
                     else throw new IllegalArgumentException("Invalid semver");
                 }
