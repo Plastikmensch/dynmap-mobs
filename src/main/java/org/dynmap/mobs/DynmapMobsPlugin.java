@@ -79,6 +79,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
             label = lbl;
             cls_id = clsid;
         }
+
         @SuppressWarnings("unchecked")
         public void init() {
             try {
@@ -277,6 +278,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
             this.isVehicle = isVehicle;
         }
 
+        /**
+         * Deletes set, clears mobicons and cache
+         */
         public void clear() {
             if (set != null) {
                 set.deleteMarkerSet();
@@ -295,6 +299,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
         World curWorld = null;
         MobLayerConfig ml_config;
 
+        /**
+         * @param conf MobLayerConfig to use
+         */
         MobUpdate(MobLayerConfig conf) {
             ml_config = conf;
         }
@@ -336,6 +343,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     break;
                 }
                 // Get next entity
+                //TODO: Adding le and i to class would allow reading and modification in other functions without having to be parsed and returned
                 LivingEntity le = mobsToDo.get(mobIndex);
                 mobIndex++;
                 int i;
@@ -384,6 +392,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 Location loc = le.getLocation();
                 if(ml_config.isVehicle && curWorld.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4) == false) continue;
                 if(isHidden(loc)) continue;
+                //TODO: Could be saved to a MobPosition class. Minor priority though as there isn't much of a benefit.
                 double x = Math.round(loc.getX() / res) * res;
                 double y = Math.round(loc.getY() / res) * res;
                 double z = Math.round(loc.getZ() / res) * res;
@@ -401,6 +410,19 @@ public class DynmapMobsPlugin extends JavaPlugin {
             getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, 1);
         }
 
+        /* TODO: While modifying i works now, because it only gets modified for the specified mobmap, in future cases, where i is set for different mobmap, it will not 
+         * In such cases createUpdateMarker should be called and i modified to mobmap.length returned
+         * Needs testing
+        */
+        /**
+         * Get the label to use for a given entity
+         * @param le The LivingEntity
+         * @param i Index in MobMapping
+         * @param x X coordinate
+         * @param y Y coordinate
+         * @param z Z coordinate
+         * @return Object[] containing label and modified index
+         */
         public Object[] getLabel(LivingEntity le, int i, double x, double y, double z) {
             String lbl = null;
             // Check for spider jockey
@@ -495,6 +517,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                }
             }
 
+            // Return here as there is no marker to be created and no label to set
             if (i >= ml_config.mobmap.length) return new Object[] {"", i};
 
             if(!ml_config.nolabels) {
@@ -514,6 +537,15 @@ public class DynmapMobsPlugin extends JavaPlugin {
 
             return new Object[] {lbl, i};
         }
+        /**
+         * Creates or updates a marker and adds it to newmap.
+         * @param entityID Unique ID of entity
+         * @param label Label to use for marker
+         * @param x X coordinate of marker
+         * @param y Y coordinate of marker
+         * @param z Z coordinate of marker
+         * @param icon Icon to use for marker
+         */
         public void createUpdateMarker(int entityID, String label, double x, double y, double z, MarkerIcon icon) {
             // Get existent marker
             Marker m = ml_config.mobicons.remove(entityID);
@@ -557,7 +589,6 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 cachedRelease = version;
                 int compare = compareVersions(curVersion, version);
                 
-                //FIXME: higher dev build notifies about earlier release
                 if(compare != -1) {
                     if(compare == 0) {
                         if(isdev) {
@@ -636,6 +667,8 @@ public class DynmapMobsPlugin extends JavaPlugin {
                     Matcher latest = semver.matcher(newVersion);
 
                     if(current.find() && latest.find()) {
+                        //FIXME: returns 2 if current version 2.0.0 and latest 1.9.1, because 2 !< 1 and 0 < 9
+                        // Proposed fix: if(Integer.parseInt(current.group(i)) != Integer.parseInt(latest.group(i))) return (Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) ? i : -1;
                         for (int i=1; i<=3;i++) {
                             if(Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) return i;
                         }
@@ -700,7 +733,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
     }
     
     public void onEnable() {
-        info("initializing");
+        info("Initializing");
         PluginManager pm = getServer().getPluginManager();
         // Get dynmap
         dynmap = pm.getPlugin("dynmap");
@@ -780,7 +813,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
 
         if(isdev) info("You are using an unstable build. Use at your own risk");
 
-        hideifshadow = cfg.getInt("update.hideifshadow", 15);
+        hideifshadow = cfg.getInt("update.hideifshadow", 4);
         hideifundercover = cfg.getInt("update.hideifundercover", 15);
         // Position resolution
         res = cfg.getDouble("update.resolution", 1.0);
@@ -818,6 +851,12 @@ public class DynmapMobsPlugin extends JavaPlugin {
         info("Activated");
     }
 
+    /**
+     * Reads the config file and sets variables in MobLayerConfig. 
+     * @param conf MobLayerConfig to set
+     * @param conf_mobs MobMapping of defined mobs
+     */
+    //TODO: Could be split and added to MobLayerConfig class.
     public void loadConfig(MobLayerConfig conf, MobMapping conf_mobs[]) {
         // Derive ident and layer from conf.identifier
         String ident = conf.identifier + "s";
@@ -852,6 +891,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 cnt++;
             }
         }
+
         // Make list of just enabled mobs
         conf.mobmap = new MobMapping[cnt];
         for(int i = 0, j = 0; i < conf_mobs.length; i++) {
@@ -866,9 +906,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
         if(conf.mobmap.length > 0) {
             conf.set = markerapi.getMarkerSet(ident + ".markerset");
             if(conf.set == null)
-                conf.set = markerapi.createMarkerSet(ident + ".markerset", cfg.getString(layer + ".name", "NoName"), null, false);
+                conf.set = markerapi.createMarkerSet(ident + ".markerset", cfg.getString(layer + ".name", ident.replace("_", " ")), null, false);
             else
-                conf.set.setMarkerSetLabel(cfg.getString(layer + ".name", "NoName"));
+                conf.set.setMarkerSetLabel(cfg.getString(layer + ".name", ident.replace("_", " ")));
             if(conf.set == null) {
                 severe("Error creating marker set");
                 return;
