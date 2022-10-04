@@ -30,19 +30,24 @@ public class DynmapMobsPlugin extends JavaPlugin {
     DynmapAPI api;
     MarkerAPI markerapi;
     FileConfiguration cfg;
-    MobLayerConfig mconf = new MobLayerConfig("mocreat_mob");
-    MobLayerConfig hconf = new MobLayerConfig("hostile_mob");
-    MobLayerConfig pconf = new MobLayerConfig("passive_mob");
-    MobLayerConfig vconf = new MobLayerConfig("vehicle", true);
     double res; // Position resolution
-    int hideifundercover;
-    int hideifshadow;
+    int minSkyLight;
+    int minBlockLight;
+    int updatesPerTick;
+    long updatePeriod;
     boolean stop;
-    boolean isdev;
+    boolean isDev;
     boolean reload = false;
+    boolean debug;
     static String obcpackage;
     static String nmspackage;
     Method gethandle;
+    // List containing all information about mobs
+    MobList mobList = new MobList();
+    // Map containing config for layers
+    HashMap<String,MobLayerConfig> layerConfig = new HashMap<String,MobLayerConfig>();
+    // Map containing Map of map icons per world
+    Map<String,Map<Integer,Marker>> worldIcons= new HashMap<String,Map<Integer,Marker>>();
     
     @Override
     public void onLoad() {
@@ -59,197 +64,246 @@ public class DynmapMobsPlugin extends JavaPlugin {
         return n;
     }
 
-    // Mapping of mobs to icons
-    private static class MobMapping {
-        String mobid;
-        boolean enabled;
-        Class<Entity> mobclass;
-        Class<?> entclass;
-        String cls_id;
-        String entclsid;
-        String label;
-        MarkerIcon icon;
-        
-        MobMapping(String id, String clsid, String lbl) {
-            this(id, clsid, lbl, null);
+    private class MobList {
+        // List of all entities
+        List<MobData> moblist = new ArrayList<MobData>();
+
+        /**
+         * Add data to moblist
+         * @param data MobData to add
+         */
+        void put(MobData data) {
+            if(!moblist.contains(data)) moblist.add(data);
         }
 
-        MobMapping(String id, String clsid, String lbl, String entclsid) {
-            mobid = id;
-            label = lbl;
-            cls_id = clsid;
+        /**
+         * Get MobData for id
+         * @param id MobID
+         * @return MobData for id or null if not found
+         */
+        MobData get(String id) {
+            for (MobData data : moblist) {
+                if(data.mobID.equals(id)) return data;
+            }
+            return null;
+        }
+
+        List<MobData> getVehicles() {
+            return getSubList("vehicle");
+        }
+
+        List<MobData> getHostiles() {
+            return getSubList("hostile");
+        }
+
+        List<MobData> getPassives() {
+            return getSubList("passive");
+        }
+
+        private List<MobData> getSubList(String category) {
+            //HashMap<String,MobData> subList = new HashMap<String,MobData>();
+            List<MobData> subList = new ArrayList<MobData>();
+            for (MobData data : moblist) {
+                if (data.category.equals(category)) subList.add(data);
+            }
+            return subList;
+        }
+
+        /**
+         * Returns the mobID for given entity
+         * @param ent Entity
+         * @return mobID
+         */
+        String getMobID(Entity ent) {
+            for (MobData entData: moblist) {
+                String key = entData.mobID;
+                if(entData.mobClass == null) continue;
+                if (entData.mobClass.isInstance(ent)) {
+                    switch(key) {
+                        case "spider": {
+                            List<Entity> passengers = ent.getPassengers();
+                            if(passengers != null && !passengers.isEmpty() && passengers.get(0) instanceof Skeleton) {
+                                key = "spiderjockey";
+
+                                // Create data for spiderjockey
+                                if(get(key) == null) {
+                                    debug("creating " + key);
+                                    put(new MobData(key, null, entData.category, "Spider Jockey"));
+                                }
+                            }
+                            break;
+                        }
+                        case "chicken": {
+                            List<Entity> passengers = ent.getPassengers();
+                            if(passengers != null && !passengers.isEmpty()) {
+                                //TODO: Differentiate between jockeys
+                                key = "chickenjockey";
+
+                                // Create data for chickenjockey
+                                if(get(key) == null) {
+                                    debug("creating " + key);
+
+                                    // Get category from passenger
+                                    //String category = get(getMobID(passengers.get(0))).category;
+                                    //debug("Category of passenger: " + category);
+
+                                    // Default to hostile for now, since category is depending on the first chicken jockey found
+                                    //TODO: remove after differentiating jockeys 
+                                    String category = "hostile";
+                                    put(new MobData(key, null, category, "Chicken Jockey"));
+                                }
+                            }
+                            break;
+                        }
+                        // Traderllama is subclass of llama
+                        case "llama": {
+                            if (get("traderllama").mobClass.isInstance(ent)) {
+                                key = "traderllama";
+                            }
+                            break;
+                        }
+                        // PigZombie is subclass of zombie
+                        case "zombie": {
+                            if (get("zombifiedpiglin").mobClass.isInstance(ent)) {
+                                key = "zombifiedpiglin";
+                            }
+                        }
+                        // MagmaCube is subclass of slime
+                        case "slime": {
+                            if(get("magmacube").mobClass.isInstance(ent)) {
+                                key = "magmacube";
+                            }
+                        }
+                        default: {
+                            if(ent instanceof Tameable && ((Tameable)ent).isTamed()) {
+                                key = "tamed" + key;
+
+                                // Create data for tamed
+                                if(get(key) == null) {
+                                    debug("creating " + key);
+                                    put(new MobData(key, null, entData.category, entData.label));
+                                }
+                            }
+                        }
+                    }
+                    return key;
+                }
+            }
+            severe("No id for " + ent.getClass().getName());
+            return null;
+        }
+
+        MarkerIcon getMobIcon(String mobID) {
+            MobData data = get(mobID);
+            return data.icon;
+        }
+    }
+
+    private class MobData {
+        // Only used internally
+        String cls;
+        // Used for logic
+        String mobID;
+        Class<Entity> mobClass;
+        String label;
+        String category;
+        boolean enabled;
+        MarkerIcon icon;
+
+        MobData(String mobID, String cls, String category) {
+            this(mobID, cls, category, null);
+        }
+        MobData(String mobID, String cls, String category, String label) {
+            this.mobID = mobID;
+            this.cls = cls;
+            this.category = category;
+            if(label == null) label = getLabelFromClass(cls);
+            this.label = label;
+            setMobClass();
+            this.icon = loadIcon();
+            this.enabled = cfg.getBoolean(category + "." + mobID, true);
+            if (!cfg.contains(category + "." + mobID, true)) severe("Missing ID in config: " + mobID);
+        }
+
+        /**
+         * Get default label infered from name of class
+         * @param cls Class name
+         * @return Label to use for this entity
+         */
+        private String getLabelFromClass(String cls) {
+            String label = "";
+            // Remove everything before last dot and convert name of class to Title Case
+            for (String w : cls.replaceAll("(.+\\.)", "").split("(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")) {
+                label += w + " ";
+            }
+            return label.trim();
         }
 
         @SuppressWarnings("unchecked")
-        public void init() {
-            try {
-                mobclass = (Class<Entity>) Class.forName(mapClassName(cls_id));
-            } catch (ClassNotFoundException cnfx) {
-                mobclass = null;
+        private void setMobClass() {
+            //TODO: Nullcheck in try..catch
+            if (cls == null) {
+                mobClass = null;
+                return;
             }
             try {
-                this.entclsid = entclsid;
-                if(entclsid != null) {
-                    entclass = (Class<?>) Class.forName(mapClassName(entclsid));
-                }
+                mobClass = (Class<Entity>) Class.forName(mapClassName(cls));
             } catch (ClassNotFoundException cnfx) {
-                entclass = null;
+                severe("Not found: " + cnfx.getMessage());
+                mobClass = null;
             }
         }
-    };
 
-    private MobMapping config_mocreat_mobs[] = {
-        // Mo'Creatures
-        new MobMapping("horse", "org.bukkit.entity.Animals", "Horse", "net.minecraft.server.MoCEntityHorse"),
-        new MobMapping("fireogre", "org.bukkit.entity.Monster", "Fire Ogre", "net.minecraft.server.MoCEntityFireOgre"),
-        new MobMapping("caveogre", "org.bukkit.entity.Monster", "Cave Ogre", "net.minecraft.server.MoCEntityCaveOgre"),
-        new MobMapping("ogre", "org.bukkit.entity.Monster", "Ogre", "net.minecraft.server.MoCEntityOgre"),
-        new MobMapping("boar", "org.bukkit.entity.Pig", "Boar", "net.minecraft.server.MoCEntityBoar"),
-        new MobMapping("polarbear", "org.bukkit.entity.Animals", "Polar Bear", "net.minecraft.server.MoCEntityPolarBear"),
-        new MobMapping("bear", "org.bukkit.entity.Animals", "Bear", "net.minecraft.server.MoCEntityBear"),
-        new MobMapping("duck", "org.bukkit.entity.Chicken", "Duck", "net.minecraft.server.MoCEntityDuck"),
-        new MobMapping("bigcat", "org.bukkit.entity.Animals", "Big Cat", "net.minecraft.server.MoCEntityBigCat"),
-        new MobMapping("deer", "org.bukkit.entity.Animals", "Deer", "net.minecraft.server.MoCEntityDeer"),
-        new MobMapping("wildwolf", "org.bukkit.entity.Monster", "Wild Wolf", "net.minecraft.server.MoCEntityWWolf"),
-        new MobMapping("flamewraith", "org.bukkit.entity.Monster", "Flame Wraith", "net.minecraft.server.MoCEntityFlameWraith"),
-        new MobMapping("wraith", "org.bukkit.entity.Monster", "Wraith", "net.minecraft.server.MoCEntityWraith"),
-        new MobMapping("bunny", "org.bukkit.entity.Animals", "Bunny", "net.minecraft.server.MoCEntityBunny"),
-        new MobMapping("bird", "org.bukkit.entity.Animals", "Bird", "net.minecraft.server.MoCEntityBird"),
-        new MobMapping("fox", "org.bukkit.entity.Animals", "Fox", "net.minecraft.server.MoCEntityFox"),
-        new MobMapping("werewolf", "org.bukkit.entity.Monster", "Werewolf", "net.minecraft.server.MoCEntityWerewolf"),
-        new MobMapping("shark", "org.bukkit.entity.WaterMob", "Shark", "net.minecraft.server.MoCEntityShark"),
-        new MobMapping("dolphin", "org.bukkit.entity.WaterMob", "Shark", "net.minecraft.server.MoCEntityDolphin"),
-        new MobMapping("fishy", "org.bukkit.entity.WaterMob", "Fishy", "net.minecraft.server.MoCEntityFishy"),
-        new MobMapping("kitty", "org.bukkit.entity.Animals", "Kitty", "net.minecraft.server.MoCEntityKitty"),
-        new MobMapping("hellrat", "org.bukkit.entity.Monster", "Hell Rat", "net.minecraft.server.MoCEntityHellRat"),
-        new MobMapping("rat", "org.bukkit.entity.Monster", "Rat", "net.minecraft.server.MoCEntityRat"),
-        new MobMapping("mouse", "org.bukkit.entity.Animals", "Mouse", "net.minecraft.server.MoCEntityMouse"),
-        new MobMapping("scorpion", "org.bukkit.entity.Monster", "Scorpion", "net.minecraft.server.MoCEntityScorpion"),
-        new MobMapping("turtle", "org.bukkit.entity.Animals", "Turtle", "net.minecraft.server.MoCEntityTurtle"),
-        new MobMapping("crocodile", "org.bukkit.entity.Animals", "Crocodile", "net.minecraft.server.MoCEntityCrocodile"),
-        new MobMapping("ray", "org.bukkit.entity.WaterMob", "Ray", "net.minecraft.server.MoCEntityRay"),
-        new MobMapping("jellyfish", "org.bukkit.entity.WaterMob", "Jelly Fish", "net.minecraft.server.MoCEntityJellyFish"),
-        new MobMapping("goat", "org.bukkit.entity.Animals", "Goat", "net.minecraft.server.MoCEntityGoat"),
-        new MobMapping("snake", "org.bukkit.entity.Animals", "Snake", "net.minecraft.server.MoCEntitySnake"),
-        new MobMapping("ostrich", "org.bukkit.entity.Animals", "Ostrich", "net.minecraft.server.MoCEntityOstrich")
-    };
+        /**
+         * Load icon image from file and create icon
+         * @return Icon
+         */
+        private MarkerIcon loadIcon() {
+            // Get icon from dynmap
+            MarkerIcon icon = markerapi.getMarkerIcon(category + "." + mobID);
 
-    //TODO: check validity of "Must be after x" comments. Probably was true before refactor of find(), but order of entities of shared class does matter
-    private MobMapping config_hostile_mobs[] = {
-        // Standard hostile
-        new MobMapping("elderguardian", "org.bukkit.entity.ElderGuardian", "Elder Guardian"),
-        new MobMapping("witherskeleton", "org.bukkit.entity.WitherSkeleton", "Wither Skeleton"),
-        new MobMapping("stray", "org.bukkit.entity.Stray", "Stray"),
-        new MobMapping("husk", "org.bukkit.entity.Husk", "Husk"),
-        new MobMapping("zombievillager", "org.bukkit.entity.ZombieVillager", "Zombie Villager"),
-        new MobMapping("evoker", "org.bukkit.entity.Evoker", "Evoker"),
-        new MobMapping("vex", "org.bukkit.entity.Vex", "Vex"),
-        new MobMapping("vindicator", "org.bukkit.entity.Vindicator", "Vindicator"),
-        new MobMapping("creeper", "org.bukkit.entity.Creeper", "Creeper"),
-        new MobMapping("skeleton", "org.bukkit.entity.Skeleton", "Skeleton"),
-        new MobMapping("giant", "org.bukkit.entity.Giant", "Giant"),
-        new MobMapping("ghast", "org.bukkit.entity.Ghast", "Ghast"),
-        new MobMapping("drowned", "org.bukkit.entity.Drowned", "Drowned"),
-        new MobMapping("phantom", "org.bukkit.entity.Phantom", "Phantom"),
-        new MobMapping("zombiepigman", "org.bukkit.entity.PigZombie", "Zombified Piglin"),
-        new MobMapping("zombie", "org.bukkit.entity.Zombie", "Zombie"), // Must be last zombie type
-        new MobMapping("enderman", "org.bukkit.entity.Enderman", "Enderman"),
-        new MobMapping("cavespider", "org.bukkit.entity.CaveSpider", "Cave Spider"),
-        new MobMapping("spider", "org.bukkit.entity.Spider", "Spider"), // Must be last spider type
-        new MobMapping("spiderjockey", "org.bukkit.entity.Spider", "Spider Jockey"), // Must be just after spider
-        new MobMapping("silverfish", "org.bukkit.entity.Silverfish", "Silverfish"),
-        new MobMapping("blaze", "org.bukkit.entity.Blaze", "Blaze"),
-        new MobMapping("magmacube", "org.bukkit.entity.MagmaCube", "Magma Cube"),
-        new MobMapping("slime", "org.bukkit.entity.Slime", "Slime"), // Must be last slime type
-        new MobMapping("enderdragon", "org.bukkit.entity.EnderDragon", "Ender Dragon"),
-        new MobMapping("wither", "org.bukkit.entity.Wither", "Wither"),
-        new MobMapping("witch", "org.bukkit.entity.Witch", "Witch"),
-        new MobMapping("endermite", "org.bukkit.entity.Endermite", "Endermite"),
-        new MobMapping("guardian", "org.bukkit.entity.Guardian", "Guardian"),
-        new MobMapping("shulker", "org.bukkit.entity.Shulker", "Shulker"),
-        new MobMapping("ravager", "org.bukkit.entity.Ravager", "Ravager"),
-        new MobMapping("illusioner", "org.bukkit.entity.Illusioner", "Illusioner"),
-        new MobMapping("pillager", "org.bukkit.entity.Pillager", "Pillager"),
-        new MobMapping("piglin", "org.bukkit.entity.Piglin", "Piglin"),
-        new MobMapping("hoglin", "org.bukkit.entity.Hoglin", "Hoglin"),
-        new MobMapping("zoglin", "org.bukkit.entity.Zoglin", "Zoglin"),
-        new MobMapping("warden", "org.bukkit.entity.Warden", "Warden")
-    };
+            // Load image from file
+            InputStream in = null;
+            if(layerConfig.get(category).tinyIcons) {
+                debug("Getting tinyicon for " + mobID);
+                in = getClass().getResourceAsStream("/8x8/" + mobID + ".png");
+            }
+            else {
+                debug("Getting icon for " + mobID);
+                in = getClass().getResourceAsStream("/" + mobID + ".png");
+            }
 
-    private MobMapping config_passive_mobs[] = {
-        // Standard passive
-        new MobMapping("skeletonhorse", "org.bukkit.entity.SkeletonHorse", "Skeleton Horse"),
-        new MobMapping("zombiehorse", "org.bukkit.entity.ZombieHorse", "Zombie Horse"),
-        new MobMapping("donkey", "org.bukkit.entity.Donkey", "Donkey"),
-        new MobMapping("tameddonkey", "org.bukkit.entity.Donkey", "Donkey"),
-        new MobMapping("mule", "org.bukkit.entity.Mule", "Mule"),
-        new MobMapping("tamedmule", "org.bukkit.entity.Mule", "Mule"),
-        new MobMapping("bat", "org.bukkit.entity.Bat", "Bat"),
-        new MobMapping("pig", "org.bukkit.entity.Pig", "Pig"),
-        new MobMapping("sheep", "org.bukkit.entity.Sheep", "Sheep"),
-        new MobMapping("cow", "org.bukkit.entity.Cow", "Cow"),
-        new MobMapping("chicken", "org.bukkit.entity.Chicken", "Chicken"),
-        new MobMapping("chickenjockey", "org.bukkit.entity.Chicken", "Chicken Jockey"), // Must be just after chicken
-        new MobMapping("squid", "org.bukkit.entity.Squid", "Squid"),
-        new MobMapping("wolf", "org.bukkit.entity.Wolf", "Wolf"),
-        new MobMapping("tamedwolf", "org.bukkit.entity.Wolf", "Wolf"), // Must be just after wolf
-        new MobMapping("mooshroom", "org.bukkit.entity.MushroomCow", "Mooshroom"),
-        new MobMapping("snowgolem", "org.bukkit.entity.Snowman", "Snow Golem"),
-        new MobMapping("ocelot", "org.bukkit.entity.Ocelot", "Ocelot"),
-        new MobMapping("cat", "org.bukkit.entity.Cat", "Cat"),
-        new MobMapping("tamedcat", "org.bukkit.entity.Cat", "Cat"),
-        new MobMapping("golem", "org.bukkit.entity.IronGolem", "Iron Golem"),
-        new MobMapping("vanillahorse", "org.bukkit.entity.Horse", "Horse"),
-        new MobMapping("tamedvanillahorse", "org.bukkit.entity.Horse", "Horse"),
-        new MobMapping("rabbit", "org.bukkit.entity.Rabbit", "Rabbit"),
-        new MobMapping("vanillapolarbear", "org.bukkit.entity.PolarBear", "Polar Bear"),
-        new MobMapping("traderllama", "org.bukkit.entity.TraderLlama", "Trader Llama"),
-        new MobMapping("tamedtraderllama", "org.bukkit.entity.TraderLlama", "Trader Llama"),
-        new MobMapping("llama", "org.bukkit.entity.Llama", "Llama"),
-        new MobMapping("tamedllama", "org.bukkit.entity.Llama", "Llama"),
-        new MobMapping("wandering_trader", "org.bukkit.entity.WanderingTrader", "Wandering Trader"),
-        new MobMapping("villager", "org.bukkit.entity.Villager", "Villager"),
-        new MobMapping("vanilladolphin", "org.bukkit.entity.Dolphin", "Dolphin"),
-        new MobMapping("cod", "org.bukkit.entity.Cod", "Cod"),
-        new MobMapping("salmon", "org.bukkit.entity.Salmon", "Salmon"),
-        new MobMapping("pufferfish", "org.bukkit.entity.PufferFish", "Pufferfish"),
-        new MobMapping("tropicalfish", "org.bukkit.entity.TropicalFish", "Tropical Fish"),
-        new MobMapping("vanillaturtle", "org.bukkit.entity.Turtle", "Turtle"),
-        new MobMapping("parrot", "org.bukkit.entity.Parrot", "Parrot"),
-        new MobMapping("tamedparrot", "org.bukkit.entity.Parrot", "Parrot"),
-        new MobMapping("panda", "org.bukkit.entity.Panda", "Panda"),
-        new MobMapping("vanillafox", "org.bukkit.entity.Fox", "Fox" ),
-        new MobMapping("bee", "org.bukkit.entity.Bee", "Bee" ),
-        new MobMapping("strider", "org.bukkit.entity.Strider", "Strider"),
-        new MobMapping("glowsquid", "org.bukkit.entity.GlowSquid", "Glow Squid"),
-        new MobMapping("vanillagoat", "org.bukkit.entity.Goat", "Goat"),
-        new MobMapping("axolotl", "org.bukkit.entity.Axolotl", "Axolotl"),
-        new MobMapping("allay", "org.bukkit.entity.Allay", "Allay"),
-        new MobMapping("frog", "org.bukkit.entity.Frog", "Frog"),
-        new MobMapping("tadpole", "org.bukkit.entity.Tadpole", "Tadpole")
-    };
+            if(in != null) {
+                // Create icon
+                if(icon == null) {
+                    debug("Creating icon for " + mobID);
+                    icon = markerapi.createMarkerIcon(category + "." + mobID, label, in);
+                }
+                // Update icon image
+                else {
+                    debug("Updating icon for " + mobID);
+                    icon.setMarkerIconImage(in);
+                }
+            }
+            else {
+                severe("No resource for " + mobID);
+            }
+            
+            // Fallback to default icon if still null
+            if(icon == null) {
+                severe("No icon found for " + mobID);
+                icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
+            }
+            
+            return icon;
+        }
 
-    private MobMapping config_vehicles[] = {
-            // Command Minecart
-            new MobMapping("command-minecart", "org.bukkit.entity.minecart.CommandMinecart", "Command Minecart"),
-            // Explosive Minecart
-            new MobMapping("explosive-minecart", "org.bukkit.entity.minecart.ExplosiveMinecart", "Explosive Minecart"),
-            // Hopper Minecart
-            new MobMapping("hopper-minecart", "org.bukkit.entity.minecart.HopperMinecart", "Hopper Minecart"),
-            // Powered Minecart
-            new MobMapping("powered-minecart", "org.bukkit.entity.minecart.PoweredMinecart", "Powered Minecart"),
-            // Rideable Minecart
-            new MobMapping("minecart", "org.bukkit.entity.minecart.RideableMinecart", "Minecart"),
-            // Spawner Minecart
-            new MobMapping("spawner-minecart", "org.bukkit.entity.minecart.SpawnerMinecart", "Spawner Minecart"),
-            // Storage Minecart
-            new MobMapping("storage-minecart", "org.bukkit.entity.minecart.StorageMinecart", "Storage Minecart"),
-            // Boat
-            new MobMapping("boat", "org.bukkit.entity.Boat", "Boat"),
-            // Storage Boat
-            new MobMapping("storage-boat", "org.bukkit.entity.ChestBoat", "Boat with Chest")
-    };
-        
+        // Temporary function to log values for debugging
+        private void print() {
+            debug("mobID: " + mobID + " cls: " + cls + ", mobclass: " + mobClass + ", label: " + label + ", category: " + category + ", enabled: " + enabled + ", icon: " + icon);
+        }
+    }
+
     public static void info(String msg) {
         log.log(Level.INFO, msg);
     }
@@ -257,190 +311,247 @@ public class DynmapMobsPlugin extends JavaPlugin {
         log.log(Level.SEVERE, msg);
     }
 
+    /* TODO: Create logger/debug class
+     * This is temporary!
+     * Simple "debug" function to not print unnecessary logs, while preserving them for development
+     * Will be replaced by a logger/debug class later
+     */
+    public void debug(String msg) {
+        if(debug) info(msg);
+    }
+
     private class MobLayerConfig {
-        MobMapping[] mobmap;
         MarkerSet set;
-        Map<Integer,Marker> mobicons = new HashMap<Integer, Marker>();
-        HashMap<String, Integer> cache = new HashMap<String, Integer>();
-        boolean tinyicons;
-        boolean nolabels;
-        boolean inc_coord;
-        boolean isVehicle;
-        long period;
-        int updates_per_tick;
+        boolean tinyIcons;
+        boolean noLabels;
+        boolean incCoord;
         String identifier;
 
-        MobLayerConfig(String identifier) {
-            this(identifier, false);
+        MobLayerConfig(String category) {
+            String layer = category + "layer.";
+            identifier = category;
+            tinyIcons = cfg.getBoolean(layer + "tinyicons", false);
+            noLabels = cfg.getBoolean(layer + "nolabels", false);
+            incCoord = cfg.getBoolean(layer + "inc_coord", false);
+            set = markerapi.getMarkerSet(layer + "markerset");
+            //FIXME: Default label for vehiclelayer becomes "Vehicle Mobs"
+            if(set == null)
+                set = markerapi.createMarkerSet(layer + "markerset", cfg.getString(layer + "name", category.substring(0, 1).toUpperCase() + category.substring(1) + " Mobs"), null, false);
+            else
+                set.setMarkerSetLabel(cfg.getString(layer + "name", category.substring(0, 1).toUpperCase() + category.substring(1) + " Mobs"));
+            if(set == null) {
+                severe("Error creating marker set");
+                return;
+            }
+            set.setLayerPriority(cfg.getInt(layer + "layerprio", 10));
+            set.setHideByDefault(cfg.getBoolean(layer + "hidebydefault", false));
+            set.setMinZoom(cfg.getInt(layer + "minzoom", 0));
         }
-        MobLayerConfig(String identifier, boolean isVehicle) {
-            this.identifier = identifier;
-            this.isVehicle = isVehicle;
-        }
-
         /**
-         * Deletes set, clears mobicons and cache
+         * Deletes MarkerSet
          */
         public void clear() {
             if (set != null) {
                 set.deleteMarkerSet();
                 set = null;
             }
-            mobicons.clear();
-            cache.clear();
         }
 
     }
+
+    /*TODO: Might be better to do what was previously done 
+     * Use runTaskLater to init this class
+     * Get worlds
+     * Process entities
+     * Self-call/reschedule task 1 tick until all worlds processed
+     * init class again after all worlds done, reschedule with updatePeriod
+     * Has the disadvantage of not running exactly at updateperiod, but avoids racing conditions  
+    */
     private class MobUpdate implements Runnable {
-        Map<Integer,Marker> newmap = new HashMap<Integer,Marker>();
+        // Marker reference to processed entities
+        Map<String,Map<Integer,Marker>> newMap = new HashMap<String,Map<Integer,Marker>>();
         ArrayList<World> worldsToDo = null;
-        List<LivingEntity> mobsToDo = null;
-        int mobIndex = 0;
+        List<Entity> entitiesToDo = null;
         World curWorld = null;
-        MobLayerConfig ml_config;
+        MobLayerConfig mlConfig;
 
-        /**
-         * @param conf MobLayerConfig to use
+        /*
+         * Expected code flow:
+         * Get worlds and delete all current markers
+         * iterate worlds
+         * get entities in world
+         * process entities
          */
-        MobUpdate(MobLayerConfig conf) {
-            ml_config = conf;
-        }
-        
         public void run() {
-            if(stop || ml_config.mobmap == null || ml_config.mobmap.length == 0 || ml_config.set == null) {
-                return;
-            }
-
+            debug("Run started");
+            entitiesToDo = null;
+            // Get worlds
             if(worldsToDo == null) {
+                debug("Getting worlds");
                 worldsToDo = new ArrayList<World>(getServer().getWorlds());
             }
-            while(mobsToDo == null) {
-                if(worldsToDo.isEmpty()) {
-                    //Review old map
-                    for(Marker oldm : ml_config.mobicons.values()) {
-                        oldm.deleteMarker();
-                    }
-                    // Replace with new map
-                    ml_config.mobicons = newmap;
-                    // Schedule next run
-                    getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, new MobUpdate(ml_config), ml_config.period);
+            // Get entities
+            while (entitiesToDo == null) {
+                debug("entitiesToDo is null");
+                if (worldsToDo.isEmpty()) {
+                    worldsToDo = null;
+                    debug("All worlds processed");
                     return;
                 }
                 else {
                     curWorld = worldsToDo.remove(0);
-                    mobsToDo = curWorld.getLivingEntities();
-                    mobIndex = 0;
-                    if((mobsToDo != null) && mobsToDo.isEmpty()) {
-                        mobsToDo = null;
+                    entitiesToDo = getWorldEntities();
+
+                    // Add new HashMap to worldIcons, if not already present. Adding without this check overwrites the HashMap.
+                    if (worldIcons.get(curWorld.getName()) == null) {
+                        debug("Added " + curWorld.getName() + " to worldIcons");
+                        worldIcons.put(curWorld.getName(), new HashMap<Integer, Marker>());
                     }
-                }
-            }
 
-            // Process up to limit per tick
-            for(int cnt = 0; cnt < ml_config.updates_per_tick; cnt++) {
-                if(mobIndex >= mobsToDo.size()) {
-                    mobsToDo = null;
-                    break;
-                }
-                // Get next entity
-                //TODO: Adding le and i to class would allow reading and modification in other functions without having to be parsed and returned
-                LivingEntity le = mobsToDo.get(mobIndex);
-                mobIndex++;
-                int i;
-
-                // Do some weird shit
-                String clsid = null;
-                if(gethandle != null) {
-                    try {
-                        clsid = gethandle.invoke(le).getClass().getName();
+                    if (newMap.get(curWorld.getName()) == null) {
+                        debug("Added " + curWorld.getName() + " to newMap");
+                        newMap.put(curWorld.getName(), new HashMap<Integer, Marker>());
                     }
-                    catch (Exception x) {}
-                }
+                    
+                    debug("newmap: " + newMap.get(curWorld.getName()).size());
+                    debug("current map: " + worldIcons.get(curWorld.getName()).size());
 
-                if(clsid == null) {
-                    clsid = le.getClass().getName();
-                }
+                    debug("Removing " + worldIcons.get(curWorld.getName()).size() + " markers");
+                    // Delete any markers left in worldIcons, as entities were not processed
+                    for (Marker oldm : worldIcons.get(curWorld.getName()).values()) {
+                        debug("Deleting " + oldm.getMarkerID() + " " + oldm.getLabel());
+                        oldm.deleteMarker();
+                    }
 
-                // Get index from cache
-                Integer idx = ml_config.cache.get(clsid);
-                // clsid not in cache
-                if(idx == null) {
-                    for(i = 0; i < ml_config.mobmap.length; i++) {
-                        if((ml_config.mobmap[i].mobclass != null) && ml_config.mobmap[i].mobclass.isInstance(le)) {
-                            if(ml_config.mobmap[i].entclsid == null) break;
-                            else if(gethandle != null) {
-                                Object obcentity = null;
-                                try {
-                                    obcentity = gethandle.invoke(le);
+                    // Clear markers as they no longer exist
+                    worldIcons.get(curWorld.getName()).clear();
+
+                    debug("Replacing map icons");
+                    // Add newMap to worldIcons
+                    for (Integer key : newMap.get(curWorld.getName()).keySet()) {
+                        worldIcons.get(curWorld.getName()).put(key, newMap.get(curWorld.getName()).get(key));
+                    }
+
+                    debug("Current map now: " + worldIcons.get(curWorld.getName()).size());
+
+                    // Skip world if no entitites
+                    if (entitiesToDo.isEmpty()) {
+                        debug("No entities found");
+                        entitiesToDo = null;
+                        continue;
+                    }
+
+                    // Process Entities in world
+                    getServer().getScheduler().runTaskTimer(DynmapMobsPlugin.this, task -> {
+                        debug("Running loop");
+                            // Process up to limit per tick
+                            for(int cnt = 0; cnt < updatesPerTick; cnt++) {
+                                if (entitiesToDo.isEmpty()) {
+                                    debug("All entities processed");
+                                    //entitiesToDo = null;
+                                    task.cancel();
+                                    // Run MobUpdate again until all worlds processed.
+                                    getServer().getScheduler().runTaskLater(DynmapMobsPlugin.this, MobUpdate.this, 1);
+                                    break;
                                 }
-                                catch (Exception x) {}
+                                // Get next entity
+                                Entity le = entitiesToDo.remove(0);//entitiesToDo.get(mobIndex);
+                                String mobID = mobList.getMobID(le);
+                                MobData mobData = mobList.get(mobID);
 
-                                if((ml_config.mobmap[i].entclass != null) && (obcentity != null) && (ml_config.mobmap[i].entclass.isInstance(obcentity))) break;
+                                // Skip if no data
+                                if (mobData == null) {
+                                    severe("No data for " + mobID);
+                                    continue;
+                                }
+
+                                // get config for layer
+                                mlConfig = layerConfig.get(mobData.category);
+
+                                // Continue if Entity is disabled
+                                if (!mobData.enabled) {
+                                    debug("Skipping. " + mobID + " disabled");
+                                    continue;
+                                }
+
+                                // Continue if Entity is passenger
+                                if (le.isInsideVehicle()) {
+                                    debug("Skipping. " + mobID + " is passenger");
+                                    continue;
+                                }
+                                debug("Processing " + mobID);
+                                
+                                // Get location of Entity
+                                Location loc = le.getLocation();
+                                if(mobData.category == "vehicle" && le.getWorld().isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4) == false) continue;
+        
+                                // Skip if entity is considered hidden
+                                if(isHidden(loc)) continue;
+        
+                                //TODO: Could be saved to a MobPosition class. Minor priority though as there isn't much of a benefit.
+                                double x = Math.round(loc.getX() / res) * res;
+                                double y = Math.round(loc.getY() / res) * res;
+                                double z = Math.round(loc.getZ() / res) * res;
+        
+                                // Get label for entity
+                                String label = getLabel(le, mobID, x, y, z);
+                                
+                                
+                                // Create Marker
+                                createUpdateMarker(le, label, x, y, z, mobData.icon);
                             }
-                        }
-                    }
-                    ml_config.cache.put(clsid, i);
+                    }, 0, 1);
+                    
                 }
-                // Found in cache
-                else {
-                    i = idx;
-                }
-
-                // Safeguard against IndexOutOfBounds
-                if(i >= ml_config.mobmap.length) continue;
-
-                Location loc = le.getLocation();
-                if(ml_config.isVehicle && curWorld.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4) == false) continue;
-                if(isHidden(loc)) continue;
-                //TODO: Could be saved to a MobPosition class. Minor priority though as there isn't much of a benefit.
-                double x = Math.round(loc.getX() / res) * res;
-                double y = Math.round(loc.getY() / res) * res;
-                double z = Math.round(loc.getZ() / res) * res;
-
-                // Set label
-                Object[] obj = getLabel(le, i, x, y, z);
-                i = (int)obj[1];
-                // Another safeguard against IndexOutOfBounds
-                if(i >= ml_config.mobmap.length) continue;
-                String label = (String) obj[0];
-
-                // Create Marker
-                createUpdateMarker(le.getEntityId(), label, x, y, z, ml_config.mobmap[i].icon);
             }
-            getServer().getScheduler().scheduleSyncDelayedTask(DynmapMobsPlugin.this, this, 1);
+            debug("End of run");
+            
+        }
+        
+        /**
+         * Get List of entities in curWorld
+         * @return List of entities in curWorld
+         */
+        public List<Entity> getWorldEntities() {
+            debug("Getting entities in " + curWorld.getName());
+            // Use set to get non-duplicate list of entities
+            Set<Entity> set = new HashSet<Entity>();
+            // List of entities which ends up returned
+            List<Entity> list = new ArrayList<Entity>();
+
+            // Add LivingEntites
+            set.addAll(curWorld.getLivingEntities());
+            // Remove players from list
+            set.removeAll(curWorld.getPlayers());
+            // Add vehicles
+            set.addAll(curWorld.getEntitiesByClasses(Vehicle.class));
+            
+            // Add all entites to list
+            list.addAll(set);
+            
+            debug("Got " + list.size() + " entities");
+            return list;
         }
 
-        /* TODO: While modifying i works now, because it only gets modified for the specified mobmap, in future cases, where i is set for different mobmap, it will not 
-         * In such cases createUpdateMarker should be called and i modified to mobmap.length returned
-         * Needs testing
-        */
         /**
          * Get the label to use for a given entity
-         * @param le The LivingEntity
-         * @param i Index in MobMapping
+         * @param le The entity
+         * @param mobID Internal ID of le
          * @param x X coordinate
          * @param y Y coordinate
          * @param z Z coordinate
-         * @return Object[] containing label and modified index
+         * @return Label for entity
          */
-        public Object[] getLabel(LivingEntity le, int i, double x, double y, double z) {
+        public String getLabel(Entity le, String mobID, double x, double y, double z) {
             String lbl = null;
-            // Check for spider jockey
-            if(ml_config.mobmap[i].mobid.equals("spider")) {
-                if(le.getPassengers() != null && !le.getPassengers().isEmpty()) {
-                    i = find("spiderjockey", hconf.mobmap);
-                }
-            }
-            // check for chicken jockey
-            else if(ml_config.mobmap[i].mobid.equals("chicken")) {
-                if(le.getPassengers() != null && !le.getPassengers().isEmpty()) {
-                    i = find("chickenjockey", pconf.mobmap);
-                }
-            }
-            else if(ml_config.mobmap[i].mobid.equals("villager")) {
-                Villager v = (Villager)le;
-                Profession p = v.getProfession();
-                if(p != null) {
+
+            // Labels disabled, so no need to continue
+            if (mlConfig.noLabels) return "";
+
+            switch(mobID) {
+                case "villager": {
+                    Villager v = (Villager)le;
+                    Profession p = v.getProfession();
                     switch(p) {
                         case NONE:
                             lbl = "Villager";
@@ -488,81 +599,83 @@ public class DynmapMobsPlugin extends JavaPlugin {
                             lbl = "Weaponsmith";
                             break;
                     }
+                    break;
                 }
-            }
-            else if(ml_config.mobmap[i].mobid.equals("zombiehorse")
-                 || ml_config.mobmap[i].mobid.equals("skeletonhorse")) {
-                List<Entity> passengers = le.getPassengers();
-                if(passengers != null && !passengers.isEmpty()) {
-                    Entity e = passengers.get(0);
-                    if (e instanceof Player) {
-                        lbl = ml_config.mobmap[i].label + " (" + ((Player)e).getName() + ")";
+                case "skeletonhorse":
+                case "zombiehorse": {
+                    List<Entity> passengers = le.getPassengers();
+                    if(passengers != null && !passengers.isEmpty()) {
+                        Entity e = passengers.get(0);
+                        if (e instanceof Player) {
+                            lbl = mobList.get(mobID).label + " (" + ((Player)e).getName() + ")";
+                        }
+                    }
+                    break;
+                }
+                default: {
+                    //TODO: Instead of checking for Tameable and isTamed, check if mobID starts with "tamed", as getMobID takes care of this already
+                    if (le instanceof Tameable) {
+                        Tameable tameable = (Tameable)le;
+                        if (tameable.isTamed()) {
+                            AnimalTamer t = tameable.getOwner();
+                            if((t != null) && (t instanceof OfflinePlayer)) {
+                                lbl = mobList.get(mobID).label + " (" + ((OfflinePlayer)t).getName() + ")";
+                            }
+                        }
                     }
                 }
             }
-           /*
-            * Check if entity is tameable
-            * Append owner to label
-            * Requires all tamed mobids to start with "tamed"
-            * NOTE: Something caused index out of bounds here once, probably weird java/file cache issue
-            */
-           else if(le instanceof Tameable) {
-               Tameable tameable = (Tameable)le;
-               if(tameable.isTamed()) {
-                   i = find("tamed" + ml_config.mobmap[i].mobid, pconf.mobmap);
-                   AnimalTamer t = tameable.getOwner();
-                   if((t != null) && (t instanceof OfflinePlayer)) {
-                       lbl = ml_config.mobmap[i].label + " (" + ((OfflinePlayer)t).getName() + ")";
-                   }
-               }
+
+            // Get default label
+            if(lbl == null) {
+                lbl = mobList.get(mobID).label;
             }
 
-            // Return here as there is no marker to be created and no label to set
-            if (i >= ml_config.mobmap.length) return new Object[] {"", i};
-
-            if(!ml_config.nolabels) {
-                if(lbl == null) {
-                    lbl = ml_config.mobmap[i].label;
-                }
-
-                if(le.getCustomName() != null) {
-                    lbl = le.getCustomName() + " (" + lbl + ")";
-                }
-
-                if(ml_config.inc_coord) {
-                    lbl = lbl + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-                }
+            // Add custom name to label
+            if(le.getCustomName() != null) {
+                lbl = le.getCustomName() + " (" + lbl + ")";
             }
-            else lbl = "";
 
-            return new Object[] {lbl, i};
+            // Add coordinates to label
+            if(mlConfig.incCoord) {
+                lbl = lbl + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
+            }
+
+            return lbl;
         }
         /**
          * Creates or updates a marker and adds it to newmap.
-         * @param entityID Unique ID of entity
+         * @param ent Entity to create marker for
          * @param label Label to use for marker
          * @param x X coordinate of marker
          * @param y Y coordinate of marker
          * @param z Z coordinate of marker
          * @param icon Icon to use for marker
          */
-        public void createUpdateMarker(int entityID, String label, double x, double y, double z, MarkerIcon icon) {
-            // Get existent marker
-            Marker m = ml_config.mobicons.remove(entityID);
+        public void createUpdateMarker(Entity ent, String label, double x, double y, double z, MarkerIcon icon) {
+            debug("Marker passed arguments: " + ent.getEntityId() + " " + label + " " + x + " " + y + " " + z + " " + icon);
+            // Get existent marker. NOTE: Marker reference can exist, while Marker is deleted
+            Marker m = worldIcons.get(ent.getWorld().getName()).remove(ent.getEntityId());
 
             // Create new marker
-            if(m == null) {
-                m = ml_config.set.createMarker(ml_config.identifier+entityID, label, curWorld.getName(), x, y, z, icon, false);
+            if(m == null || m.getUniqueMarkerID() == null) {
+                debug("Creating new marker for " + label);
+                m = mlConfig.set.createMarker(mlConfig.identifier+ent.getEntityId(), label, ent.getWorld().getName(), x, y, z, icon, false);
+
+                // createMarker() returns null if marker with given id already exists. 
+                if (m == null) severe("Failed to create marker");
             }
             // Update marker
             else {
-                m.setLocation(curWorld.getName(), x, y, z);
+                debug("Updating existing marker for " + label);
+                m.setLocation(ent.getWorld().getName(), x, y, z);
                 m.setLabel(label);
                 m.setMarkerIcon(icon);
             }
             // Add marker to new map
             if (m != null) {
-                newmap.put(entityID, m);
+                debug("Adding marker to new map");
+                newMap.get(ent.getWorld().getName()).put(ent.getEntityId(), m);
             }
         }
     }
@@ -591,7 +704,7 @@ public class DynmapMobsPlugin extends JavaPlugin {
                 
                 if(compare != -1) {
                     if(compare == 0) {
-                        if(isdev) {
+                        if(isDev) {
                             info("There is a stable release of " + curVersion + " available");
                             info("Get it at " + downloadURL);
                         }
@@ -683,35 +796,34 @@ public class DynmapMobsPlugin extends JavaPlugin {
     }
 
     /**
-     * Look for index of mobid in provided MobMapping.
-     * @param mobid ID to match
-     * @param mobs List of mobs
-     * @return Index of mobid, otherwise length 
-     */
-    private int find(String mobid, MobMapping[] mobs) {
-        int idx = 0;
-        while (idx < mobs.length) {
-            if(mobs[idx].mobid.equals(mobid)) return idx;
-            idx++;
-        }
-        severe("find: Couldn't find " + mobid);
-        return mobs.length;
-    }
-
-    /**
      * Check whether entity is considered hidden
      * @param loc Location of entity
      * @return true if hidden, otherwise false
      */
+    /*TODO: Use combination of sky light and block light to determine whether a mob should be considered hidden or not in overworld
+     * Use block light in nether
+     * Check if sky light is also always 0 in the end
+     * Change default values of config accordingly
+    */
     private boolean isHidden(Location loc) {
         Block blk = loc.getBlock();
-        if(hideifshadow < 15) {
-            if(blk.getLightLevel() <= hideifshadow) {
+        debug("Block is in " + blk.getWorld().getEnvironment().name());
+        debug("Sky Light: " + blk.getLightFromSky());
+        debug("Block Light: " + blk.getLightLevel());
+        debug("Block Light (no sun): " + blk.getLightFromBlocks());
+        //NOTE: Sky light is always 0 in nether
+        //blk.getWorld().getEnvironment() == NORMAL
+        if(minSkyLight < 15) {
+            if(blk.getLightFromSky() <= minSkyLight) {
+                debug("Mob is underground");
                 return true;
             }
         }
-        if(hideifundercover < 15) {
-            if(blk.getLightFromSky() <= hideifundercover) {
+        //FIXME: Most mobs are hidden at night or don't show up, even though they should
+        //NOTE: Block light changes based on time of day
+        if(minBlockLight < 15) {
+            if(blk.getLightLevel() <= minBlockLight) {
+                debug("Mob is in shadow");
                 return true;
             }
         }
@@ -770,6 +882,9 @@ public class DynmapMobsPlugin extends JavaPlugin {
         return obcpackage;
     }
 
+    /**
+     * Activate DynmapMobs
+     */
     private void activate() {
         // Look up the getHandle method for CraftEntity
         try {
@@ -780,15 +895,16 @@ public class DynmapMobsPlugin extends JavaPlugin {
         } catch (SecurityException e) {
         }
         if(gethandle == null) {
-            severe("Unable to locate CraftEntity.getHandle() - cannot process most Mo'Creatures mobs");
+            severe("Unable to locate CraftEntity.getHandle() - cannot process most custom mobs");
         }
         
-        // Now, get markers API
+        // Now, get dynmaps marker API
         markerapi = api.getMarkerAPI();
         if(markerapi == null) {
             severe("Error loading Dynmap marker API!");
             return;
         }
+
         // Load configuration
         if(reload) {
             reloadConfig();
@@ -805,38 +921,69 @@ public class DynmapMobsPlugin extends JavaPlugin {
         // Save updates, if needed
         this.saveConfig();
 
+        // Toggle debugging
+        debug = cfg.getBoolean("debug.all", false);
+
         // Check if build is dev build
-        isdev = this.getDescription().getVersion().contains("-");
+        isDev = this.getDescription().getVersion().contains("-");
 
-        if(isdev) info("You are using an unstable build. Use at your own risk");
+        if(isDev) info("You are using an unstable build. Use at your own risk");
 
-        hideifshadow = cfg.getInt("update.hideifshadow", 4);
-        hideifundercover = cfg.getInt("update.hideifundercover", 15);
+        // Set Layer Config
+        layerConfig.put("hostile", new MobLayerConfig("hostile"));
+        layerConfig.put("passive", new MobLayerConfig("passive"));
+        layerConfig.put("vehicle", new MobLayerConfig("vehicle"));
+
+        // Get List of Entities
+        for(EntityType type : EntityType.values()) {
+            try {
+                // Ignore ARMOR_STAND and PLAYER
+                if (type.equals(EntityType.ARMOR_STAND) || type.equals(EntityType.PLAYER)) continue;
+
+                String category = null;
+
+                //NOTE: Mountable mobs count as vehicles.
+                //      Zombified Piglin is part of Monster.
+                //      Hoglin, Slime, MagmaCube, Ghast, EnderDragon, Shulker and Phantom are not part of Monster
+                
+                //TODO: beautify this
+                if (Monster.class.isAssignableFrom(type.getEntityClass()) && !(type.equals(EntityType.ZOMBIFIED_PIGLIN))) category = "hostile";
+                else if (type.equals(EntityType.HOGLIN) || type.equals(EntityType.SLIME) || type.equals(EntityType.MAGMA_CUBE) || type.equals(EntityType.GHAST) || type.equals(EntityType.ENDER_DRAGON) || type.equals(EntityType.SHULKER) || type.equals(EntityType.PHANTOM)) category = "hostile";
+                else if (LivingEntity.class.isAssignableFrom(type.getEntityClass())) category = "passive";
+                else if (Vehicle.class.isAssignableFrom(type.getEntityClass())) category = "vehicle";
+                else {
+                    debug("Unknown category for " + type);
+                    continue;
+                }
+
+                debug("Found Entity: " + type);
+                debug("class: " + type.getEntityClass().getName());
+                // Infere mobid from type
+                String mobID = type.toString().replace("_", "").toLowerCase();
+                // Add to moblist
+                mobList.put(new MobData(mobID, type.getEntityClass().getName(), category));
+
+                debug("Created " + mobID);
+                mobList.get(mobID).print();
+                
+            }
+            // Silently ignore null exception thrown
+            catch (Exception e) {}
+        }
+
+        minBlockLight = cfg.getInt("update.hideifshadow", 4);
+        minSkyLight = cfg.getInt("update.hideifundercover", 15);
+        updatesPerTick = cfg.getInt("update.updates-per-tick", 20);
+
+        double per = cfg.getDouble("update.period", 5.0);
+        if (per < 2.0) per = 2.0;
+        updatePeriod = (long)(per*20.0);
+
         // Position resolution
         res = cfg.getDouble("update.resolution", 1.0);
-        // Update period
-        double per = cfg.getDouble("update.period", 5.0);
-        if(per < 2.0) per = 2.0;
-        long updperiod = (long)(per*20.0);
-        mconf.period = updperiod;
-        hconf.period = updperiod;
-        pconf.period = updperiod;
-        // Vehicle update period
-        double vper = cfg.getDouble("update.vehicleperiod", 10.0);
-        if(vper < 2.0) vper = 2.0;
-        vconf.period = (long)(vper*20.0) / 3;
 
-        int updates_per_tick = cfg.getInt("update.mobs-per-tick", 20);
-        mconf.updates_per_tick = updates_per_tick;
-        hconf.updates_per_tick = updates_per_tick;
-        pconf.updates_per_tick = updates_per_tick;
-        vconf.updates_per_tick = cfg.getInt("update.vehicles-per-tick", 20);
-        stop = false;
-
-        loadConfig(mconf, config_mocreat_mobs);
-        loadConfig(hconf, config_hostile_mobs);
-        loadConfig(pconf, config_passive_mobs);
-        loadConfig(vconf, config_vehicles);
+        // Mob Update
+        getServer().getScheduler().runTaskTimer(this, new MobUpdate(), updatePeriod, updatePeriod);
 
         // Update Check
         if(cfg.getBoolean("general.update-check", true)) {
@@ -848,91 +995,18 @@ public class DynmapMobsPlugin extends JavaPlugin {
         info("Activated");
     }
 
-    /**
-     * Reads the config file and sets variables in MobLayerConfig. 
-     * @param conf MobLayerConfig to set
-     * @param conf_mobs MobMapping of defined mobs
-     */
-    //TODO: Could be split and added to MobLayerConfig class.
-    public void loadConfig(MobLayerConfig conf, MobMapping conf_mobs[]) {
-        // Derive ident and layer from conf.identifier
-        String ident = conf.identifier + "s";
-        String layer = conf.identifier.split("_")[0] + "layer";
-        // Set layer config
-        conf.tinyicons = cfg.getBoolean(layer + ".tinyicons", false);
-        conf.nolabels = cfg.getBoolean(layer + ".nolabels", false);
-        conf.inc_coord = cfg.getBoolean(layer + ".inc-coord", false);
-
-        // Check which entities are enabled
-        Set<Class<Entity>> clsset = new HashSet<Class<Entity>>();
-        int cnt = 0;
-        for(int i = 0; i < conf_mobs.length; i++) {
-            conf_mobs[i].init();
-            conf_mobs[i].enabled = cfg.getBoolean(ident + "." + conf_mobs[i].mobid, false);
-            conf_mobs[i].icon = markerapi.getMarkerIcon(ident + "." + conf_mobs[i].mobid);
-            InputStream in = null;
-            if(conf.tinyicons)
-                in = getClass().getResourceAsStream("/8x8/" + conf_mobs[i].mobid + ".png");
-            if(in == null)
-                in = getClass().getResourceAsStream("/" + conf_mobs[i].mobid + ".png");
-            if(in != null) {
-                if(conf_mobs[i].icon == null)
-                    conf_mobs[i].icon = markerapi.createMarkerIcon(ident + "." + conf_mobs[i].mobid, conf_mobs[i].label, in);
-                else    // Update image
-                    conf_mobs[i].icon.setMarkerIconImage(in);
-            }
-            if(conf_mobs[i].icon == null) {
-                conf_mobs[i].icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
-            }
-            if(conf_mobs[i].enabled) {
-                cnt++;
-            }
-        }
-
-        // Make list of just enabled mobs
-        conf.mobmap = new MobMapping[cnt];
-        for(int i = 0, j = 0; i < conf_mobs.length; i++) {
-            if(conf_mobs[i].enabled) {
-                conf.mobmap[j] = conf_mobs[i];
-                j++;
-                clsset.add(conf_mobs[i].mobclass);
-            }
-        }
-
-        // Now, add marker set for mobs (make it transient)
-        if(conf.mobmap.length > 0) {
-            conf.set = markerapi.getMarkerSet(ident + ".markerset");
-            if(conf.set == null)
-                conf.set = markerapi.createMarkerSet(ident + ".markerset", cfg.getString(layer + ".name", ident.replace("_", " ")), null, false);
-            else
-                conf.set.setMarkerSetLabel(cfg.getString(layer + ".name", ident.replace("_", " ")));
-            if(conf.set == null) {
-                severe("Error creating marker set");
-                return;
-            }
-            conf.set.setLayerPriority(cfg.getInt(layer + ".layerprio", 10));
-            conf.set.setHideByDefault(cfg.getBoolean(layer + ".hidebydefault", false));
-            int minzoom = cfg.getInt(layer + ".minzoom", 0);
-            if(minzoom > 0) // Don't call if non-default - lets us work with pre-0.28 dynmap
-                conf.set.setMinZoom(minzoom);
-            getServer().getScheduler().scheduleSyncDelayedTask(this, new MobUpdate(conf), conf.period);
-            info(layer + " enabled");
-        }
-        else {
-            info(layer + " disabled");
-        }
-    }
-
     public void onDisable() {
         reset();
         stop = true;
     }
 
     public void reset() {
-        mconf.clear();
-        hconf.clear();
-        pconf.clear();
-        vconf.clear();
+        // Delete markersets
+        for (String conf : layerConfig.keySet()) {
+            layerConfig.get(conf).clear();
+        }
+        // Dereference markers.
+        worldIcons.clear();
     }
 
 }
