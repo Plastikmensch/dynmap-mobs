@@ -1,5 +1,6 @@
 package org.dynmap.mobs;
 import org.bukkit.*;
+import org.bukkit.World.Environment;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.*;
@@ -800,32 +801,28 @@ public class DynmapMobsPlugin extends JavaPlugin {
      * @param loc Location of entity
      * @return true if hidden, otherwise false
      */
-    /*TODO: Use combination of sky light and block light to determine whether a mob should be considered hidden or not in overworld
-     * Use block light in nether
-     * Check if sky light is also always 0 in the end
-     * Change default values of config accordingly
-    */
     private boolean isHidden(Location loc) {
+        // Get block in location
         Block blk = loc.getBlock();
+        // Get light level of block by getting max value of sky light and block light
+        int light = Math.max(blk.getLightFromSky(), blk.getLightLevel());
+
         debug("Block is in " + blk.getWorld().getEnvironment().name());
         debug("Sky Light: " + blk.getLightFromSky());
         debug("Block Light: " + blk.getLightLevel());
         debug("Block Light (no sun): " + blk.getLightFromBlocks());
-        //NOTE: Sky light is always 0 in nether
-        //blk.getWorld().getEnvironment() == NORMAL
-        if(minSkyLight < 15) {
-            if(blk.getLightFromSky() <= minSkyLight) {
-                debug("Mob is underground");
-                return true;
-            }
+        debug("Light: " + light);
+
+        //NOTE: Sky light is always 0 in nether and the end. Unknown behaviour in custom environment
+        if((minSkyLight < 15) && blk.getLightFromSky() <= minSkyLight && blk.getWorld().getEnvironment() == Environment.NORMAL) {
+            debug("Mob is underground");
+            return true;
         }
-        //FIXME: Most mobs are hidden at night or don't show up, even though they should
-        //NOTE: Block light changes based on time of day
-        if(minBlockLight < 15) {
-            if(blk.getLightLevel() <= minBlockLight) {
-                debug("Mob is in shadow");
-                return true;
-            }
+
+        //NOTE: Block light changes based on time of day, while sky light doesn't
+        if((minBlockLight < 15) && light <= minBlockLight) {
+            debug("Mob is in shadow");
+            return true;
         }
         return false;
     }
