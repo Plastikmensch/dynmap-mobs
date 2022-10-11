@@ -211,7 +211,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                     return key;
                 }
             }
-            logger.severe("No id for " + ent.getClass().getName());
+            logger.debug("No id for " + ent.getClass().getName());
             return "";
         }
     }
@@ -428,7 +428,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
 
                                 // Skip if no data
                                 if (mobData == null) {
-                                    logger.severe("No data for " + mobID);
+                                    logger.debug("No data for " + mobID);
                                     continue;
                                 }
 
