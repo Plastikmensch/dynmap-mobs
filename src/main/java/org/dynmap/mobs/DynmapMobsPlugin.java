@@ -211,7 +211,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                     return key;
                 }
             }
-            logger.debug("No id for " + ent.getClass().getName());
+            logger.severe("No id for " + ent.getClass().getName());
             return "";
         }
     }
@@ -428,7 +428,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
 
                                 // Skip if no data
                                 if (mobData == null) {
-                                    logger.debug("No data for " + mobID);
+                                    logger.severe("No data for " + mobID);
                                     continue;
                                 }
 
@@ -488,6 +488,8 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
             set.addAll(curWorld.getLivingEntities());
             // Remove players from set
             curWorld.getPlayers().forEach(set::remove);
+            // Remove Armor Stand from set
+            set.removeIf(ent -> ent.getType() == EntityType.ARMOR_STAND);
             // Add vehicles
             set.addAll(curWorld.getEntitiesByClasses(Vehicle.class));
             
