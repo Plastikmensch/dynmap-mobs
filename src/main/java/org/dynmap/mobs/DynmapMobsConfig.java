@@ -97,8 +97,6 @@ public class DynmapMobsConfig {
         }
         reload = true;
 
-        //plugin.saveDefaultConfig();
-
         // Load defaults if needed
         fileConfiguration.options().copyDefaults(true);
 

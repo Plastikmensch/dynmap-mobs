@@ -22,7 +22,6 @@ import java.util.*;
  * Main class of Dynmap Mobs
  */
 public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
-    //private static Logger log;
     DynmapMobsLogger logger;
     Plugin dynmap;
     DynmapAPI api;
@@ -239,14 +238,14 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
             this.category = category.asString();
             if(label == null) label = getLabelFromClass(cls);
             this.label = label;
-            setMobClass();
+            this.mobClass = getMobClass();
             this.icon = loadIcon();
             this.enabled = config.fileConfiguration.getBoolean(this.category + "." + mobID, true);
             if (!config.fileConfiguration.contains(this.category + "." + mobID, true)) logger.severe("Missing ID in config: " + mobID);
         }
 
         /**
-         * Get default label infered from name of class
+         * Get default label inferred from name of class
          * @param cls Class name
          * @return Label to use for this entity
          */
@@ -259,18 +258,22 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
             return label.toString().trim();
         }
 
+        /**
+         * Get class of entity
+         * @return Entity class or null
+         */
         @SuppressWarnings("unchecked")
-        private void setMobClass() {
-            //TODO: Nullcheck in try..catch
-            if (cls == null) {
-                mobClass = null;
-                return;
-            }
+        private Class<Entity> getMobClass() {
             try {
-                mobClass = (Class<Entity>) Class.forName(mapClassName(cls));
-            } catch (ClassNotFoundException cnfx) {
-                logger.severe("Not found: " + cnfx.getMessage());
-                mobClass = null;
+                return (Class<Entity>) Class.forName(mapClassName(cls));
+            }
+            catch (ClassNotFoundException cnfx) {
+                logger.severe("Not Found: " + cnfx.getMessage());
+                return null;
+            }
+            // mapClassName throws NPE if cls is null
+            catch (NullPointerException e) {
+                return null;
             }
         }
 
@@ -413,14 +416,13 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                             for(int cnt = 0; cnt < config.updatesPerTick; cnt++) {
                                 if (entitiesToDo.isEmpty()) {
                                     logger.debug("All entities processed");
-                                    //entitiesToDo = null;
                                     task.cancel();
                                     // Run MobUpdate again until all worlds processed.
                                     getServer().getScheduler().runTaskLater(DynmapMobsPlugin.this, MobUpdate.this, 1);
                                     break;
                                 }
                                 // Get next entity
-                                Entity le = entitiesToDo.remove(0);//entitiesToDo.get(mobIndex);
+                                Entity le = entitiesToDo.remove(0);
                                 String mobID = mobList.getMobID(le);
                                 MobData mobData = mobList.get(mobID);
 
@@ -459,7 +461,6 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                                 double z = Math.round(loc.getZ() / config.positionResolution) * config.positionResolution;
         
                                 // Get label for entity
-                                //TODO: MobData could be parsed instead of mobID
                                 String label = getLabel(le, mobData, x, y, z);
                                 
                                 
@@ -632,6 +633,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                 m.setLabel(label);
                 m.setMarkerIcon(icon);
             }
+
             // Add marker to new map
             if (m != null) {
                 logger.debug("Adding marker to new map");
@@ -748,36 +750,52 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
 
         // Get List of Entities
         for(EntityType type : EntityType.values()) {
-            // Ignore ARMOR_STAND, PLAYER and UNKNOWN
-            if (type.equals(EntityType.ARMOR_STAND) || type.equals(EntityType.PLAYER) || type.equals(EntityType.UNKNOWN)) continue;
-
             MobCategory category;
 
-            try {
-                //NOTE: Mountable mobs count as vehicles.
-                //      Zombified Piglin is part of Monster.
-                //      Hoglin, Slime, MagmaCube, Ghast, EnderDragon, Shulker and Phantom are not part of Monster
-                
-                //TODO: beautify this
-                if(type.getEntityClass() == null) logger.severe("Unknown class for " + type);
-                if (Monster.class.isAssignableFrom(type.getEntityClass()) && !(type.equals(EntityType.ZOMBIFIED_PIGLIN))) category = MobCategory.HOSTILE;
-                else if (type.equals(EntityType.HOGLIN) || type.equals(EntityType.SLIME) || type.equals(EntityType.MAGMA_CUBE) || type.equals(EntityType.GHAST) || type.equals(EntityType.ENDER_DRAGON) || type.equals(EntityType.SHULKER) || type.equals(EntityType.PHANTOM)) category = MobCategory.HOSTILE;
-                else if (LivingEntity.class.isAssignableFrom(type.getEntityClass())) category = MobCategory.PASSIVE;
-                else if (Vehicle.class.isAssignableFrom(type.getEntityClass())) category = MobCategory.VEHICLE;
-                else {
-                    logger.debug("Unknown category for " + type);
+            /*NOTE: Mountable entities are assignable to Vehicle
+             *      Zombified Piglin is assignable to Monster despite counting as passive
+             *      Hoglin, Slime, MagmaCube, Ghast, EnderDragon, Shulker and Phantom are not assignable to Monster
+             *      Warnings about "might be null" or "may produce NPE" can be safely ignored, as only UNKNOWN has no attached class
+             */
+            switch(type) {
+                // Assignable entities to ignore
+                case ARMOR_STAND:
+                case PLAYER:
+                case UNKNOWN: {
                     continue;
                 }
-
-                logger.debug("Found Entity: " + type);
-                logger.debug("class: " + type.getEntityClass().getName());
+                // Hostile entities which aren't assignable to Monster
+                case HOGLIN:
+                case SLIME:
+                case MAGMA_CUBE:
+                case GHAST:
+                case ENDER_DRAGON:
+                case SHULKER:
+                case PHANTOM: {
+                    category = MobCategory.HOSTILE;
+                    break;
+                }
+                // Passive entities assignable to Monster
+                case ZOMBIFIED_PIGLIN: {
+                    category = MobCategory.PASSIVE;
+                    break;
+                }
+                // Determine which category an entity belongs to by checking to which class it's assignable
+                default: {
+                    if (Monster.class.isAssignableFrom(type.getEntityClass())) category = MobCategory.HOSTILE;
+                    else if (LivingEntity.class.isAssignableFrom(type.getEntityClass())) category = MobCategory.PASSIVE;
+                    else if (Vehicle.class.isAssignableFrom(type.getEntityClass())) category = MobCategory.VEHICLE;
+                    else {
+                        logger.debug("Unknown category for " + type);
+                        continue;
+                    }
+                }
             }
-            // Silently ignore null exception thrown
-            catch (NullPointerException e) {
-                continue;
-            }
 
-            // Infere mobid from type
+            logger.debug("Found entity: " + type);
+            logger.debug("Class: " + type.getEntityClass().getName());
+
+            // Infer mobid from type
             String mobID = type.toString().replace("_", "").toLowerCase();
             // Add to moblist
             mobList.put(new MobData(mobID, type.getEntityClass().getName(), category));
