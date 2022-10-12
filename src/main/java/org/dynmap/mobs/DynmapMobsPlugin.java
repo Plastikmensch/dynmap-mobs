@@ -174,27 +174,34 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                         }
                         // Traderllama is subclass of llama
                         case "llama": {
-                            if (get("traderllama").mobClass.isInstance(ent)) {
+                            MobData subData = get("traderllama");
+                            if (subData != null && subData.mobClass.isInstance(ent)) {
                                 key = "traderllama";
                             }
                             break;
                         }
                         // PigZombie is subclass of zombie
                         case "zombie": {
-                            if (get("zombifiedpiglin").mobClass.isInstance(ent)) {
+                            MobData subData = get("zombifiedpiglin");
+                            if (subData != null && subData.mobClass.isInstance(ent)) {
                                 key = "zombifiedpiglin";
                             }
+                            break;
                         }
                         // MagmaCube is subclass of slime
                         case "slime": {
-                            if(get("magmacube").mobClass.isInstance(ent)) {
+                            MobData subData = get("magmacube");
+                            if (subData != null && subData.mobClass.isInstance(ent)) {
                                 key = "magmacube";
                             }
+                            break;
                         }
                         case "boat": {
-                            if (get("chestboat").mobClass.isInstance(ent)) {
+                            MobData subData = get("chestboat");
+                            if (subData != null && subData.mobClass.isInstance(ent)) {
                                 key = "chestboat";
                             }
+                            break;
                         }
                         default: {
                             if(ent instanceof Tameable && ((Tameable)ent).isTamed()) {
@@ -799,6 +806,13 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
 
             // Infer mobid from type
             String mobID = type.toString().replace("_", "").toLowerCase();
+
+            // Legacy: Zombified_Piglin used to be Pig_Zombie.
+            if (mobID.equals("pigzombie")) {
+                mobID = "zombifiedpiglin";
+                category = MobCategory.PASSIVE;
+            }
+
             // Add to moblist
             mobList.put(new MobData(mobID, type.getEntityClass().getName(), category));
 
