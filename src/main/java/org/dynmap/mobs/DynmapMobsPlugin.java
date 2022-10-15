@@ -9,6 +9,7 @@ import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import org.dynmap.DynmapAPI;
 import org.dynmap.markers.*;
 import org.dynmap.markers.Marker;
@@ -75,7 +76,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
          * @param data MobData to add
          */
         void put(MobData data) {
-            if(!moblist.contains(data)) moblist.add(data);
+            if (get(data.mobID) == null) moblist.add(data);
         }
 
         /**
@@ -334,352 +335,320 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         }
     }
 
-    /*TODO: Might be better to do what was previously done 
-     * Use runTaskLater to init this class
-     * Get worlds
-     * Process entities
-     * Self-call/reschedule task 1 tick until all worlds processed
-     * init class again after all worlds done, reschedule with updatePeriod
-     * Has the disadvantage of not running exactly at updateperiod, but avoids racing conditions  
-    */
     private class MobUpdate implements Runnable {
-        // Marker reference to processed entities
-        Map<String,Map<Integer,Marker>> updatedMap = new HashMap<String,Map<Integer,Marker>>();
-        ArrayList<World> worldsToDo = null;
-        List<Entity> entitiesToDo = null;
-        World curWorld = null;
-        MobLayerConfig mlConfig;
+        private final Map<World,BukkitTask> tasks = new HashMap<World,BukkitTask>();
 
-        /*
-         * Expected code flow:
-         * Get worlds and delete all current markers
-         * iterate worlds
-         * get entities in world
-         * process entities
-         */
+        @Override
         public void run() {
-            logger.debug("Run started");
-            entitiesToDo = null;
-            // Get worlds
-            if(worldsToDo == null) {
-                logger.debug("Getting worlds");
-                worldsToDo = new ArrayList<World>(getServer().getWorlds());
-            }
-            // Get entities
-            while (entitiesToDo == null) {
-                logger.debug("entitiesToDo is null");
-                if (worldsToDo.isEmpty()) {
-                    worldsToDo = null;
-                    logger.debug("All worlds processed");
-                    return;
+            logger.debug("Getting worlds");
+            ArrayList<World> worldsTodo = new ArrayList<World>(getServer().getWorlds());
+            for (World world : worldsTodo) {
+                //TODO: Check if world enabled (#38)
+                // Add new HashMap to worldIcons, if not already present. Adding without this check overwrites the HashMap.
+                if (worldIcons.get(world.getName()) == null) {
+                    logger.debug("Added " + world.getName() + " to worldIcons");
+                    worldIcons.put(world.getName(), new HashMap<Integer, Marker>());
                 }
-                else {
-                    curWorld = worldsToDo.remove(0);
-                    entitiesToDo = getWorldEntities();
 
-                    // Add new HashMap to worldIcons, if not already present. Adding without this check overwrites the HashMap.
-                    if (worldIcons.get(curWorld.getName()) == null) {
-                        logger.debug("Added " + curWorld.getName() + " to worldIcons");
-                        worldIcons.put(curWorld.getName(), new HashMap<Integer, Marker>());
-                    }
+                if (!isStillRunning(tasks.get(world))) {
+                    logger.debug("Scheduling update for " + world.getName());
+                    tasks.put(world, getServer().getScheduler().runTask(DynmapMobsPlugin.this, new MobWorldUpdate(world)));
+                    logger.debug("Created Task: " + tasks.get(world).getTaskId());
+                }
+                else logger.severe("Update for " + world.getName() + " still running. Increase updatePeriod!");
+            }
+        }
 
-                    if (updatedMap.get(curWorld.getName()) == null) {
-                        logger.debug("Added " + curWorld.getName() + " to updatedMap");
-                        updatedMap.put(curWorld.getName(), new HashMap<Integer, Marker>());
-                    }
-                    
-                    logger.debug("updatedMap: " + updatedMap.get(curWorld.getName()).size());
-                    logger.debug("current map: " + worldIcons.get(curWorld.getName()).size());
+        private boolean isStillRunning(BukkitTask task) {
+            return (task != null && (getServer().getScheduler().isCurrentlyRunning(task.getTaskId()) || getServer().getScheduler().isQueued(task.getTaskId())));
+        }
 
-                    logger.debug("Removing " + worldIcons.get(curWorld.getName()).size() + " markers");
-                    // Delete any markers left in worldIcons, as entities were not processed
-                    for (Marker oldm : worldIcons.get(curWorld.getName()).values()) {
-                        logger.debug("Deleting " + oldm.getMarkerID() + " " + oldm.getLabel());
-                        oldm.deleteMarker();
-                    }
+        //TODO: Rethink if functions have to be attached to class
+        private class MobWorldUpdate implements Runnable {
+            // Marker reference to processed entities
+            Map<Integer,Marker> updatedMap = new HashMap<Integer,Marker>();
+            List<Entity> entitiesToDo;
+            World curWorld;
+            MobLayerConfig mlConfig;
 
-                    // Clear markers as they no longer exist
+            MobWorldUpdate(World world) {
+                this.curWorld = world;
+                this.entitiesToDo = getWorldEntities();
+            }
+
+            public void run() {
+                logger.debug("Starting update on " + curWorld.getName());
+                if (entitiesToDo.isEmpty()) {
+                    logger.debug("All entities processed in " + curWorld.getName());
+                    // Cleanup markers
+                    logger.debug("Processed entities: " + updatedMap.size());
+                    logger.debug("Markers to remove: " + worldIcons.get(curWorld.getName()).size());
+                    worldIcons.get(curWorld.getName()).forEach( (id, oldMarker) -> {
+                        logger.debug("Deleting marker " + oldMarker.getMarkerID() + " for entity " + id + " ("+ oldMarker.getLabel() + ")");
+                        oldMarker.deleteMarker();
+                    });
+                    // Clear worldIcons for world
                     worldIcons.get(curWorld.getName()).clear();
 
-                    logger.debug("Replacing map icons");
                     // Add updatedMap to worldIcons
-                    for (Integer key : updatedMap.get(curWorld.getName()).keySet()) {
-                        worldIcons.get(curWorld.getName()).put(key, updatedMap.get(curWorld.getName()).get(key));
+                    for (Integer key : updatedMap.keySet()) {
+                        worldIcons.get(curWorld.getName()).put(key, updatedMap.get(key));
+                    }
+                    return;
+                }
+
+                // Process entities
+                for (int cnt = 0; cnt <= config.updatesPerTick; cnt++) {
+                    // All entities processed
+                    if (entitiesToDo.isEmpty()) {
+                        break;
                     }
 
-                    logger.debug("Current map now: " + worldIcons.get(curWorld.getName()).size());
+                    // Get next entity
+                    Entity ent = entitiesToDo.remove(0);
+                    MobData mobData = mobList.get(mobList.getMobID(ent));
 
-                    // Skip world if no entitites
-                    if (entitiesToDo.isEmpty()) {
-                        logger.debug("No entities found");
-                        entitiesToDo = null;
+                    if (mobData == null) {
+                        logger.severe("No data for " + ent.getClass().getName());
                         continue;
                     }
 
-                    // Process Entities in world
-                    getServer().getScheduler().runTaskTimer(DynmapMobsPlugin.this, task -> {
-                        logger.debug("Running loop");
-                            // Process up to limit per tick
-                            for(int cnt = 0; cnt < config.updatesPerTick; cnt++) {
-                                if (entitiesToDo.isEmpty()) {
-                                    logger.debug("All entities processed");
-                                    task.cancel();
-                                    // Run MobUpdate again until all worlds processed.
-                                    getServer().getScheduler().runTaskLater(DynmapMobsPlugin.this, MobUpdate.this, 1);
-                                    break;
-                                }
-                                // Get next entity
-                                Entity le = entitiesToDo.remove(0);
-                                String mobID = mobList.getMobID(le);
-                                MobData mobData = mobList.get(mobID);
+                    if (!mobData.enabled) {
+                        logger.debug("Skipping: disabled entity " + mobData.mobID);
+                        continue;
+                    }
 
-                                // Skip if no data
-                                if (mobData == null) {
-                                    logger.severe("No data for " + mobID);
-                                    continue;
-                                }
+                    if (ent.isInsideVehicle()) {
+                        logger.debug("Skipping: entity is passenger");
+                        continue;
+                    }
 
-                                // get config for layer
-                                mlConfig = config.layer.get(mobData.mobCategory);
+                    logger.debug("Processing: " + ent.getEntityId() + " " + mobData.mobID);
 
-                                // Continue if Entity is disabled
-                                if (!mobData.enabled) {
-                                    logger.debug("Skipping. " + mobID + " disabled");
-                                    continue;
-                                }
+                    // Get location of Entity
+                    Location loc = ent.getLocation();
+                    if(mobData.mobCategory.equals(MobCategory.VEHICLE) && !ent.getWorld().isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) continue;
 
-                                // Continue if Entity is passenger
-                                if (le.isInsideVehicle()) {
-                                    logger.debug("Skipping. " + mobID + " is passenger");
-                                    continue;
-                                }
-                                logger.debug("Processing " + mobID);
-                                
-                                // Get location of Entity
-                                Location loc = le.getLocation();
-                                if(mobData.mobCategory.equals(MobCategory.VEHICLE) && !le.getWorld().isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) continue;
-        
-                                // Skip if entity is considered hidden
-                                if(isHidden(loc)) continue;
-        
-                                //TODO: Could be saved to a MobPosition class. Minor priority though as there isn't much of a benefit.
-                                double x = Math.round(loc.getX() / config.positionResolution) * config.positionResolution;
-                                double y = Math.round(loc.getY() / config.positionResolution) * config.positionResolution;
-                                double z = Math.round(loc.getZ() / config.positionResolution) * config.positionResolution;
-        
-                                // Get label for entity
-                                String label = getLabel(le, mobData, x, y, z);
-                                
-                                
-                                // Create Marker
-                                createUpdateMarker(le, label, x, y, z, mobData.icon);
+                    // Skip if entity is considered hidden
+                    if(isHidden(loc)) continue;
+
+                    //TODO: Could be saved to a MobPosition class. Minor priority though as there isn't much of a benefit.
+                    double x = Math.round(loc.getX() / config.positionResolution) * config.positionResolution;
+                    double y = Math.round(loc.getY() / config.positionResolution) * config.positionResolution;
+                    double z = Math.round(loc.getZ() / config.positionResolution) * config.positionResolution;
+
+                    // Get layer config
+                    mlConfig = config.layer.get(mobData.mobCategory);
+
+                    // Get label for entity
+                    String label = getLabel(ent, mobData, x, y, z);
+
+                    // Create Marker
+                    createUpdateMarker(ent, label, x, y, z, mobData.icon);
+
+                }
+                // Reschedule this run
+                tasks.put(curWorld, getServer().getScheduler().runTaskLater(DynmapMobsPlugin.this, this, 1));
+            }
+
+            /**
+             * Get List of entities in curWorld
+             * @return List of entities in curWorld
+             */
+            public List<Entity> getWorldEntities() {
+                logger.debug("Getting entities in " + curWorld.getName());
+                // Use set to get non-duplicate list of entities
+                Set<Entity> set = new HashSet<Entity>(curWorld.getLivingEntities());
+                // Remove players from set
+                curWorld.getPlayers().forEach(set::remove);
+                // Remove Armor Stand from set
+                set.removeIf(ent -> ent.getType() == EntityType.ARMOR_STAND);
+                // Add vehicles
+                set.addAll(curWorld.getEntitiesByClasses(Vehicle.class));
+
+                logger.debug("Got " + set.size() + " entities");
+
+                // Convert set to list and return it
+                return new ArrayList<Entity>(set);
+            }
+
+            /**
+             * Get the label to use for a given entity
+             * @param le The entity
+             * @param mobData MobData associated with le
+             * @param x X coordinate
+             * @param y Y coordinate
+             * @param z Z coordinate
+             * @return Label for entity
+             */
+            public String getLabel(Entity le, MobData mobData, double x, double y, double z) {
+                String lbl = null;
+
+                // Labels disabled, so no need to continue
+                if (mlConfig.noLabels) return "";
+
+                switch(mobData.mobID) {
+                    case "villager": {
+                        Villager v = (Villager)le;
+                        Profession p = v.getProfession();
+                        switch(p) {
+                            case NONE:
+                                lbl = "Villager";
+                                break;
+                            case ARMORER:
+                                lbl = "Armorer";
+                                break;
+                            case BUTCHER:
+                                lbl = "Butcher";
+                                break;
+                            case CARTOGRAPHER:
+                                lbl = "Cartographer";
+                                break;
+                            case CLERIC:
+                                lbl = "Cleric";
+                                break;
+                            case FARMER:
+                                lbl = "Farmer";
+                                break;
+                            case FISHERMAN:
+                                lbl = "Fisherman";
+                                break;
+                            case FLETCHER:
+                                lbl = "Fletcher";
+                                break;
+                            case LEATHERWORKER:
+                                lbl = "Leatherworker";
+                                break;
+                            case LIBRARIAN:
+                                lbl = "Librarian";
+                                break;
+                            case MASON:
+                                lbl = "Mason";
+                                break;
+                            case NITWIT:
+                                lbl = "Nitwit";
+                                break;
+                            case SHEPHERD:
+                                lbl = "Shepherd";
+                                break;
+                            case TOOLSMITH:
+                                lbl = "Toolsmith";
+                                break;
+                            case WEAPONSMITH:
+                                lbl = "Weaponsmith";
+                                break;
+                        }
+                        break;
+                    }
+                    case "skeletonhorse":
+                    case "zombiehorse": {
+                        List<Entity> passengers = le.getPassengers();
+                        if(!passengers.isEmpty()) {
+                            Entity e = passengers.get(0);
+                            if (e instanceof Player) {
+                                lbl = mobData.label + " (" + ((Player)e).getName() + ")";
                             }
-                    }, 0, 1);
-                    
-                }
-            }
-            logger.debug("End of run");
-            
-        }
-        
-        /**
-         * Get List of entities in curWorld
-         * @return List of entities in curWorld
-         */
-        public List<Entity> getWorldEntities() {
-            logger.debug("Getting entities in " + curWorld.getName());
-            // Use set to get non-duplicate list of entities
-            Set<Entity> set = new HashSet<Entity>();
-
-            // Add LivingEntities
-            set.addAll(curWorld.getLivingEntities());
-            // Remove players from set
-            curWorld.getPlayers().forEach(set::remove);
-            // Remove Armor Stand from set
-            set.removeIf(ent -> ent.getType() == EntityType.ARMOR_STAND);
-            // Add vehicles
-            set.addAll(curWorld.getEntitiesByClasses(Vehicle.class));
-            
-            // Add all entities to list
-            List<Entity> list = new ArrayList<Entity>(set);
-            
-            logger.debug("Got " + list.size() + " entities");
-            return list;
-        }
-
-        /**
-         * Get the label to use for a given entity
-         * @param le The entity
-         * @param mobData MobData associated with le
-         * @param x X coordinate
-         * @param y Y coordinate
-         * @param z Z coordinate
-         * @return Label for entity
-         */
-        public String getLabel(Entity le, MobData mobData, double x, double y, double z) {
-            String lbl = null;
-
-            // Labels disabled, so no need to continue
-            if (mlConfig.noLabels) return "";
-
-            switch(mobData.mobID) {
-                case "villager": {
-                    Villager v = (Villager)le;
-                    Profession p = v.getProfession();
-                    switch(p) {
-                        case NONE:
-                            lbl = "Villager";
-                            break;
-                        case ARMORER:
-                            lbl = "Armorer";
-                            break;
-                        case BUTCHER:
-                            lbl = "Butcher";
-                            break;
-                        case CARTOGRAPHER:
-                            lbl = "Cartographer";
-                            break;
-                        case CLERIC:
-                            lbl = "Cleric";
-                            break;
-                        case FARMER:
-                            lbl = "Farmer";
-                            break;
-                        case FISHERMAN:
-                            lbl = "Fisherman";
-                            break;
-                        case FLETCHER:
-                            lbl = "Fletcher";
-                            break;
-                        case LEATHERWORKER:
-                            lbl = "Leatherworker";
-                            break;
-                        case LIBRARIAN:
-                            lbl = "Librarian";
-                            break;
-                        case MASON:
-                            lbl = "Mason";
-                            break;
-                        case NITWIT:
-                            lbl = "Nitwit";
-                            break;
-                        case SHEPHERD:
-                            lbl = "Shepherd";
-                            break;
-                        case TOOLSMITH:
-                            lbl = "Toolsmith";
-                            break;
-                        case WEAPONSMITH:
-                            lbl = "Weaponsmith";
-                            break;
-                    }
-                    break;
-                }
-                case "skeletonhorse":
-                case "zombiehorse": {
-                    List<Entity> passengers = le.getPassengers();
-                    if(!passengers.isEmpty()) {
-                        Entity e = passengers.get(0);
-                        if (e instanceof Player) {
-                            lbl = mobData.label + " (" + ((Player)e).getName() + ")";
                         }
+                        break;
                     }
-                    break;
-                }
-                default: {
-                    if (mobData.mobID.startsWith("tamed")) {
-                        AnimalTamer t = ((Tameable)le).getOwner();
-                        if (t instanceof OfflinePlayer) {
-                            lbl = mobData.label + " (" + ((OfflinePlayer)t).getName() + ")";
+                    default: {
+                        if (mobData.mobID.startsWith("tamed")) {
+                            AnimalTamer t = ((Tameable)le).getOwner();
+                            if (t instanceof OfflinePlayer) {
+                                lbl = mobData.label + " (" + ((OfflinePlayer)t).getName() + ")";
+                            }
                         }
                     }
                 }
+
+                // Get default label
+                if(lbl == null) {
+                    lbl = mobData.label;
+                }
+
+                // Add custom name to label
+                if(le.getCustomName() != null) {
+                    lbl = le.getCustomName() + " (" + lbl + ")";
+                }
+
+                // Add coordinates to label
+                if(mlConfig.incCoord) {
+                    lbl = lbl + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
+                }
+
+                return lbl;
             }
 
-            // Get default label
-            if(lbl == null) {
-                lbl = mobData.label;
+            /**
+             * Creates or updates a marker and adds it to updatedMap.
+             * @param ent Entity to create marker for
+             * @param label Label to use for marker
+             * @param x X coordinate of marker
+             * @param y Y coordinate of marker
+             * @param z Z coordinate of marker
+             * @param icon Icon to use for marker
+             */
+            public void createUpdateMarker(Entity ent, String label, double x, double y, double z, MarkerIcon icon) {
+                logger.debug("Marker passed arguments: " + ent.getEntityId() + " " + label + " " + x + " " + y + " " + z + " " + icon.getMarkerIconID());
+                String world = ent.getWorld().getName();
+                logger.debug("Entity is in " + world);
+                // Get existent marker. NOTE: Marker reference can exist, while Marker is deleted
+                Marker m = worldIcons.get(world).remove(ent.getEntityId());
+
+                // Create new marker
+                if(m == null || m.getUniqueMarkerID() == null) {
+                    logger.debug("Creating new marker for " + label);
+                    m = mlConfig.set.createMarker(mlConfig.identifier+ent.getEntityId(), label, world, x, y, z, icon, false);
+
+                    // createMarker() returns null if marker with given id already exists.
+                    if (m == null) logger.severe("Failed to create marker");
+                }
+                // Update marker
+                else {
+                    logger.debug("Updating existing marker for " + label);
+                    m.setLocation(world, x, y, z);
+                    m.setLabel(label);
+                    m.setMarkerIcon(icon);
+                }
+
+                // Add marker to new map
+                if (m != null) {
+                    logger.debug("Adding marker to updated map");
+                    updatedMap.put(ent.getEntityId(), m);
+                }
             }
 
-            // Add custom name to label
-            if(le.getCustomName() != null) {
-                lbl = le.getCustomName() + " (" + lbl + ")";
-            }
+            /**
+             * Check whether entity is considered hidden
+             * @param loc Location of entity
+             * @return true if hidden, otherwise false
+             */
+            private boolean isHidden(Location loc) {
+                // Get block in location
+                Block blk = loc.getBlock();
+                // Get light level of block by getting max value of sky light and block light
+                int light = Math.max(blk.getLightFromSky(), blk.getLightLevel());
 
-            // Add coordinates to label
-            if(mlConfig.incCoord) {
-                lbl = lbl + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
-            }
+                logger.debug("Block is in " + blk.getWorld().getEnvironment().name());
+                logger.debug("Sky Light: " + blk.getLightFromSky());
+                logger.debug("Block Light: " + blk.getLightLevel());
+                logger.debug("Block Light (no sun): " + blk.getLightFromBlocks());
+                logger.debug("Light: " + light);
 
-            return lbl;
+                //NOTE: Sky light is always 0 in nether and the end. Unknown behaviour in custom environment
+                if((config.minSkyLight < 15) && blk.getLightFromSky() <= config.minSkyLight && blk.getWorld().getEnvironment() == Environment.NORMAL) {
+                    logger.debug("Mob is underground");
+                    return true;
+                }
+
+                //NOTE: Block light changes based on time of day, while sky light doesn't
+                if((config.minLight < 15) && light <= config.minLight) {
+                    logger.debug("Mob is in shadow");
+                    return true;
+                }
+                return false;
+            }
         }
-        /**
-         * Creates or updates a marker and adds it to updatedMap.
-         * @param ent Entity to create marker for
-         * @param label Label to use for marker
-         * @param x X coordinate of marker
-         * @param y Y coordinate of marker
-         * @param z Z coordinate of marker
-         * @param icon Icon to use for marker
-         */
-        public void createUpdateMarker(Entity ent, String label, double x, double y, double z, MarkerIcon icon) {
-            logger.debug("Marker passed arguments: " + ent.getEntityId() + " " + label + " " + x + " " + y + " " + z + " " + icon);
-            // Get existent marker. NOTE: Marker reference can exist, while Marker is deleted
-            Marker m = worldIcons.get(ent.getWorld().getName()).remove(ent.getEntityId());
-
-            // Create new marker
-            if(m == null || m.getUniqueMarkerID() == null) {
-                logger.debug("Creating new marker for " + label);
-                m = mlConfig.set.createMarker(mlConfig.identifier+ent.getEntityId(), label, ent.getWorld().getName(), x, y, z, icon, false);
-
-                // createMarker() returns null if marker with given id already exists. 
-                if (m == null) logger.severe("Failed to create marker");
-            }
-            // Update marker
-            else {
-                logger.debug("Updating existing marker for " + label);
-                m.setLocation(ent.getWorld().getName(), x, y, z);
-                m.setLabel(label);
-                m.setMarkerIcon(icon);
-            }
-
-            // Add marker to new map
-            if (m != null) {
-                logger.debug("Adding marker to new map");
-                updatedMap.get(ent.getWorld().getName()).put(ent.getEntityId(), m);
-            }
-        }
-    }
-
-    /**
-     * Check whether entity is considered hidden
-     * @param loc Location of entity
-     * @return true if hidden, otherwise false
-     */
-    private boolean isHidden(Location loc) {
-        // Get block in location
-        Block blk = loc.getBlock();
-        // Get light level of block by getting max value of sky light and block light
-        int light = Math.max(blk.getLightFromSky(), blk.getLightLevel());
-
-        logger.debug("Block is in " + blk.getWorld().getEnvironment().name());
-        logger.debug("Sky Light: " + blk.getLightFromSky());
-        logger.debug("Block Light: " + blk.getLightLevel());
-        logger.debug("Block Light (no sun): " + blk.getLightFromBlocks());
-        logger.debug("Light: " + light);
-
-        //NOTE: Sky light is always 0 in nether and the end. Unknown behaviour in custom environment
-        if((config.minSkyLight < 15) && blk.getLightFromSky() <= config.minSkyLight && blk.getWorld().getEnvironment() == Environment.NORMAL) {
-            logger.debug("Mob is underground");
-            return true;
-        }
-
-        //NOTE: Block light changes based on time of day, while sky light doesn't
-        if((config.minLight < 15) && light <= config.minLight) {
-            logger.debug("Mob is in shadow");
-            return true;
-        }
-        return false;
     }
 
     private class OurServerListener implements Listener {
@@ -705,7 +674,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         // Get API
         api = (DynmapAPI)dynmap;
 
-        getServer().getPluginManager().registerEvents(new OurServerListener(), this);        
+        getServer().getPluginManager().registerEvents(new OurServerListener(), this);
 
         // If dynmap is enabled, activate
         if(dynmap.isEnabled())
@@ -737,7 +706,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
     /**
      * Activate DynmapMobs
      */
-    private void activate() {
+    public void activate() {
         // Look up the getHandle method for CraftEntity
         try {
             Class<?> cls = Class.forName(mapClassName("org.bukkit.craftbukkit.entity.CraftEntity"));
@@ -841,6 +810,11 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
 
     @Override
     public void reset() {
+        // cancel any pending tasks
+        getServer().getScheduler().getPendingTasks().forEach( (task) -> {
+            if (task.getOwner() == DynmapMobsPlugin.this) task.cancel();
+        });
+
         // Delete markersets
         for (MobCategory conf : config.layer.keySet()) {
             config.layer.get(conf).clear();
