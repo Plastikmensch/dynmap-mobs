@@ -29,4 +29,9 @@ public interface IDynmapMobs extends Plugin {
      * Delete marker sets and marker references
      */
     void reset();
+
+    /**
+     * Activate this plugin
+     */
+    void activate();
 }
