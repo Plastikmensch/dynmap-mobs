@@ -1,7 +1,8 @@
 name: dynmap-mobs
+description: Show mobs and vehicles on Dynmap
 main: org.dynmap.mobs.DynmapMobsPlugin
 version: "${project.version}"
-api-version: "1.18"
+api-version: "1.13"
 author: mikeprimm
 depend: [ dynmap ]
 
