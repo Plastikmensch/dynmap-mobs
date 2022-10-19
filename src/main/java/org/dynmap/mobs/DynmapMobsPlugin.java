@@ -1,4 +1,5 @@
 package org.dynmap.mobs;
+
 import org.bukkit.*;
 import org.bukkit.World.Environment;
 import org.bukkit.block.Block;
@@ -34,7 +35,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
     // List containing all information about mobs
     MobList mobList = new MobList();
     // Map containing Map of map icons per world
-    Map<String,Map<Integer,Marker>> worldIcons= new HashMap<String,Map<Integer,Marker>>();
+    Map<String, Map<Integer, Marker>> worldIcons= new HashMap<String, Map<Integer, Marker>>();
     
     @Override
     public void onLoad() {
@@ -58,10 +59,10 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
     }
     
     public static String mapClassName(String n) {
-        if(n.startsWith("org.bukkit.craftbukkit")) {
+        if (n.startsWith("org.bukkit.craftbukkit")) {
             n = getOBCPackage() + n.substring("org.bukkit.craftbukkit".length());
         }
-        else if(n.startsWith("net.minecraft.server")) {
+        else if (n.startsWith("net.minecraft.server")) {
             n = getNMSPackage() + n.substring("net.minecraft.server".length());
         }
         return n;
@@ -86,7 +87,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
          */
         MobData get(String id) {
             for (MobData data : moblist) {
-                if(data.mobID.equals(id)) return data;
+                if (data.mobID.equals(id)) return data;
             }
             return null;
         }
@@ -136,16 +137,16 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         String getMobID(Entity ent) {
             for (MobData entData: moblist) {
                 String key = entData.mobID;
-                if(entData.mobClass == null) continue;
+                if (entData.mobClass == null) continue;
                 if (entData.mobClass.isInstance(ent)) {
-                    switch(key) {
+                    switch (key) {
                         case "spider": {
                             List<Entity> passengers = ent.getPassengers();
-                            if(!passengers.isEmpty() && passengers.get(0) instanceof Skeleton) {
+                            if (!passengers.isEmpty() && passengers.get(0) instanceof Skeleton) {
                                 key = "spiderjockey";
 
                                 // Create data for spiderjockey
-                                if(get(key) == null) {
+                                if (get(key) == null) {
                                     logger.debug("creating " + key);
                                     put(new MobData(key, null, entData.mobCategory, "Spider Jockey"));
                                 }
@@ -154,12 +155,12 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                         }
                         case "chicken": {
                             List<Entity> passengers = ent.getPassengers();
-                            if(!passengers.isEmpty()) {
+                            if (!passengers.isEmpty()) {
                                 //TODO: Differentiate between jockeys
                                 key = "chickenjockey";
 
                                 // Create data for chickenjockey
-                                if(get(key) == null) {
+                                if (get(key) == null) {
                                     logger.debug("creating " + key);
 
                                     // Get category from passenger
@@ -205,11 +206,11 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                             break;
                         }
                         default: {
-                            if(ent instanceof Tameable && ((Tameable)ent).isTamed()) {
+                            if (ent instanceof Tameable && ((Tameable)ent).isTamed()) {
                                 key = "tamed" + key;
 
                                 // Create data for tamed
-                                if(get(key) == null) {
+                                if (get(key) == null) {
                                     logger.debug("creating " + key);
                                     put(new MobData(key, null, entData.mobCategory, entData.label));
                                 }
@@ -239,12 +240,13 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         MobData(String mobID, String cls, MobCategory category) {
             this(mobID, cls, category, null);
         }
+
         MobData(String mobID, String cls, MobCategory category, String label) {
             this.mobID = mobID;
             this.cls = cls;
             this.mobCategory = category;
             this.category = category.asString();
-            if(label == null) label = getLabelFromClass(cls);
+            if (label == null) label = getLabelFromClass(cls);
             this.label = label;
             this.mobClass = getMobClass();
             this.icon = loadIcon();
@@ -295,7 +297,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
 
             // Load image from file
             InputStream in;
-            if(config.layer.get(mobCategory).tinyIcons) {
+            if (config.layer.get(mobCategory).tinyIcons) {
                 logger.debug("Getting tinyicon for " + mobID);
                 in = getClass().getResourceAsStream("/8x8/" + mobID + ".png");
             }
@@ -304,9 +306,9 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                 in = getClass().getResourceAsStream("/" + mobID + ".png");
             }
 
-            if(in != null) {
+            if (in != null) {
                 // Create icon
-                if(icon == null) {
+                if (icon == null) {
                     logger.debug("Creating icon for " + mobID);
                     icon = markerapi.createMarkerIcon(category + "." + mobID, label, in);
                 }
@@ -321,7 +323,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
             }
             
             // Fallback to default icon if still null
-            if(icon == null) {
+            if (icon == null) {
                 logger.severe("No icon found for " + mobID);
                 icon = markerapi.getMarkerIcon(MarkerIcon.DEFAULT);
             }
@@ -336,7 +338,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
     }
 
     private class MobUpdate implements Runnable {
-        private final Map<World,BukkitTask> tasks = new HashMap<World,BukkitTask>();
+        private final Map<World, BukkitTask> tasks = new HashMap<World, BukkitTask>();
 
         @Override
         public void run() {
@@ -366,7 +368,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         //TODO: Rethink if functions have to be attached to class
         private class MobWorldUpdate implements Runnable {
             // Marker reference to processed entities
-            Map<Integer,Marker> updatedMap = new HashMap<Integer,Marker>();
+            Map<Integer, Marker> updatedMap = new HashMap<Integer, Marker>();
             List<Entity> entitiesToDo;
             World curWorld;
             MobLayerConfig mlConfig;
@@ -383,7 +385,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                     // Cleanup markers
                     logger.debug("Processed entities: " + updatedMap.size());
                     logger.debug("Markers to remove: " + worldIcons.get(curWorld.getName()).size());
-                    worldIcons.get(curWorld.getName()).forEach( (id, oldMarker) -> {
+                    worldIcons.get(curWorld.getName()).forEach((id, oldMarker) -> {
                         logger.debug("Deleting marker " + oldMarker.getMarkerID() + " for entity " + id + " ("+ oldMarker.getLabel() + ")");
                         oldMarker.deleteMarker();
                     });
@@ -427,10 +429,10 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
 
                     // Get location of Entity
                     Location loc = ent.getLocation();
-                    if(mobData.mobCategory.equals(MobCategory.VEHICLE) && !ent.getWorld().isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) continue;
+                    if (mobData.mobCategory.equals(MobCategory.VEHICLE) && !ent.getWorld().isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) continue;
 
                     // Skip if entity is considered hidden
-                    if(isHidden(loc)) continue;
+                    if (isHidden(loc)) continue;
 
                     //TODO: Could be saved to a MobPosition class. Minor priority though as there isn't much of a benefit.
                     double x = Math.round(loc.getX() / config.positionResolution) * config.positionResolution;
@@ -487,11 +489,11 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                 // Labels disabled, so no need to continue
                 if (mlConfig.noLabels) return "";
 
-                switch(mobData.mobID) {
+                switch (mobData.mobID) {
                     case "villager": {
                         Villager v = (Villager)le;
                         Profession p = v.getProfession();
-                        switch(p) {
+                        switch (p) {
                             case NONE:
                                 lbl = "Villager";
                                 break;
@@ -537,13 +539,16 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                             case WEAPONSMITH:
                                 lbl = "Weaponsmith";
                                 break;
+                            default:
+                                logger.severe("Missing Villager profession: " + p);
+                                lbl = "Unknown";
                         }
                         break;
                     }
                     case "skeletonhorse":
                     case "zombiehorse": {
                         List<Entity> passengers = le.getPassengers();
-                        if(!passengers.isEmpty()) {
+                        if (!passengers.isEmpty()) {
                             Entity e = passengers.get(0);
                             if (e instanceof Player) {
                                 lbl = mobData.label + " (" + ((Player)e).getName() + ")";
@@ -562,17 +567,17 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                 }
 
                 // Get default label
-                if(lbl == null) {
+                if (lbl == null) {
                     lbl = mobData.label;
                 }
 
                 // Add custom name to label
-                if(le.getCustomName() != null) {
+                if (le.getCustomName() != null) {
                     lbl = le.getCustomName() + " (" + lbl + ")";
                 }
 
                 // Add coordinates to label
-                if(mlConfig.incCoord) {
+                if (mlConfig.incCoord) {
                     lbl = lbl + " [" + (int)x + "," + (int)y + "," + (int)z + "]";
                 }
 
@@ -596,7 +601,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                 Marker m = worldIcons.get(world).remove(ent.getEntityId());
 
                 // Create new marker
-                if(m == null || m.getUniqueMarkerID() == null) {
+                if (m == null || m.getUniqueMarkerID() == null) {
                     logger.debug("Creating new marker for " + label);
                     m = mlConfig.set.createMarker(mlConfig.identifier+ent.getEntityId(), label, world, x, y, z, icon, false);
 
@@ -636,13 +641,13 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                 logger.debug("Light: " + light);
 
                 //NOTE: Sky light is always 0 in nether and the end. Unknown behaviour in custom environment
-                if((config.minSkyLight < 15) && blk.getLightFromSky() <= config.minSkyLight && blk.getWorld().getEnvironment() == Environment.NORMAL) {
+                if ((config.minSkyLight < 15) && blk.getLightFromSky() <= config.minSkyLight && blk.getWorld().getEnvironment() == Environment.NORMAL) {
                     logger.debug("Mob is underground");
                     return true;
                 }
 
                 //NOTE: Block light changes based on time of day, while sky light doesn't
-                if((config.minLight < 15) && light <= config.minLight) {
+                if ((config.minLight < 15) && light <= config.minLight) {
                     logger.debug("Mob is in shadow");
                     return true;
                 }
@@ -656,7 +661,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         public void onPluginEnable(PluginEnableEvent event) {
             Plugin p = event.getPlugin();
             String name = p.getDescription().getName();
-            if(name.equals("dynmap")) {
+            if (name.equals("dynmap")) {
                 activate();
             }
         }
@@ -667,7 +672,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         PluginManager pm = getServer().getPluginManager();
         // Get dynmap
         dynmap = pm.getPlugin("dynmap");
-        if(dynmap == null) {
+        if (dynmap == null) {
             logger.severe("Cannot find dynmap!");
             return;
         }
@@ -677,9 +682,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         getServer().getPluginManager().registerEvents(new OurServerListener(), this);
 
         // If dynmap is enabled, activate
-        if(dynmap.isEnabled())
-            activate();
-
+        if (dynmap.isEnabled()) activate();
     }
 
     private static String getNMSPackage() {
@@ -688,14 +691,17 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
             // Get getHandle() method
             try {
                 Method m = srv.getClass().getMethod("getHandle");
-                Object scm = m.invoke(srv); // And use it to get SCM (nms object)
+                // And use it to get SCM (nms object)
+                Object scm = m.invoke(srv);
                 nmspackage = scm.getClass().getPackage().getName();
-            } catch (Exception x) {
+            }
+            catch (Exception x) {
                 nmspackage = "net.minecraft.server";
             }
         }
         return nmspackage;
     }
+
     private static String getOBCPackage() {
         if (obcpackage == null) {
             obcpackage = Bukkit.getServer().getClass().getPackage().getName();
@@ -711,23 +717,24 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         try {
             Class<?> cls = Class.forName(mapClassName("org.bukkit.craftbukkit.entity.CraftEntity"));
             gethandle = cls.getMethod("getHandle");
-        } catch (ClassNotFoundException | SecurityException | NoSuchMethodException e) {
+        }
+        catch (ClassNotFoundException | SecurityException | NoSuchMethodException e) {
             logger.severe("Unable to locate CraftEntity.getHandle() - cannot process most custom mobs");
         }
         
         // Now, get dynmaps marker API
         markerapi = api.getMarkerAPI();
-        if(markerapi == null) {
+        if (markerapi == null) {
             logger.severe("Error loading Dynmap marker API!");
             return;
         }
 
         config.read();
 
-        if(config.isDev) logger.info("You are using an unstable build. Use at your own risk");
+        if (config.isDev) logger.info("You are using an unstable build. Use at your own risk");
 
         // Get List of Entities
-        for(EntityType type : EntityType.values()) {
+        for (EntityType type : EntityType.values()) {
             MobCategory category;
 
             /*NOTE: Mountable entities are assignable to Vehicle
@@ -735,7 +742,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
              *      Hoglin, Slime, MagmaCube, Ghast, EnderDragon, Shulker and Phantom are not assignable to Monster
              *      Warnings about "might be null" or "may produce NPE" can be safely ignored, as only UNKNOWN has no attached class
              */
-            switch(type) {
+            switch (type) {
                 // Assignable entities to ignore
                 case ARMOR_STAND:
                 case PLAYER:
@@ -795,7 +802,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
         getServer().getScheduler().runTaskTimer(this, new MobUpdate(), config.updatePeriod, config.updatePeriod);
 
         // Update Check
-        if(config.updateCheck) {
+        if (config.updateCheck) {
             getServer().getScheduler().runTask(this, new DynmapMobsUpdateCheck(this));
             logger.info("Update check enabled");
         }
@@ -811,7 +818,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
     @Override
     public void reset() {
         // cancel any pending tasks
-        getServer().getScheduler().getPendingTasks().forEach( (task) -> {
+        getServer().getScheduler().getPendingTasks().forEach((task) -> {
             if (task.getOwner() == DynmapMobsPlugin.this) task.cancel();
         });
 

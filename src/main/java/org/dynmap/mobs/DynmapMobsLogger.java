@@ -56,7 +56,7 @@ public final class DynmapMobsLogger {
      * @param msg Message to log
      */
     public void debug(String msg) {
-        if(plugin.getPluginConfig().debug) {
+        if (plugin.getPluginConfig().debug) {
             info(msg);
             logToFile(logFile, msg);
         }

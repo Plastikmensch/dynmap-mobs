@@ -20,9 +20,9 @@ public class DynmapMobsUpdateCheck implements Runnable {
     // Delay between update checks in server ticks. 25h by default.
     private final long delay = 1800000L;
     // ETag used for conditional requests
-    private String etag = null;
+    private String etag;
     // Cached release tag
-    private String cachedRelease = null;
+    private String cachedRelease;
 
     DynmapMobsUpdateCheck(IDynmapMobs plugin) {
         this.plugin = plugin;
@@ -33,14 +33,15 @@ public class DynmapMobsUpdateCheck implements Runnable {
      * Compares release tag with plugin version
      */
     public void run() {
+        logger.debug("Checking for update...");
         getVersion(version -> {
             String curVersion = plugin.getDescription().getVersion();
             cachedRelease = version;
             int compare = compareVersions(curVersion, version);
 
-            if(compare != -1) {
-                if(compare == 0) {
-                    if(plugin.getPluginConfig().isDev) {
+            if (compare != -1) {
+                if (compare == 0) {
+                    if (plugin.getPluginConfig().isDev) {
                         logger.info("There is a stable release of " + curVersion + " available");
                         logger.info("Get it at " + downloadURL);
                     }
@@ -67,7 +68,7 @@ public class DynmapMobsUpdateCheck implements Runnable {
                 // iterate over elements
                 while (scanner.hasNext()) {
                     String key = scanner.next();
-                    if(key.contains("tag_name")) {
+                    if (key.contains("tag_name")) {
                         // get release tag
                         String tag = key.split(":")[1].replaceAll("\"", "");
                         // check that release tag has the correct format
@@ -81,11 +82,13 @@ public class DynmapMobsUpdateCheck implements Runnable {
                 }
                 // if no release tag found, use cached release tag
                 consumer.accept(cachedRelease);
-            } catch (Exception e) {
+            }
+            catch (Exception e) {
                 logger.severe("Unable to check for updates: " + e.getMessage());
             }
         });
     }
+
     /**
      * Connect to the GitHub api
      * @return The connection to the GitHub api
@@ -109,15 +112,15 @@ public class DynmapMobsUpdateCheck implements Runnable {
      * @return index of mismatch or 0 if same, -1 if ahead
      */
     public int compareVersions(String version, String newVersion) {
-        if(!version.equals(newVersion)) {
+        if (!version.equals(newVersion)) {
             try {
                 Pattern semver = Pattern.compile("^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
                 Matcher current = semver.matcher(version);
                 Matcher latest = semver.matcher(newVersion);
 
-                if(current.find() && latest.find()) {
-                    for (int i=1; i<=3;i++) {
-                        if(Integer.parseInt(current.group(i)) != Integer.parseInt(latest.group(i))) return (Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) ? i : -1;
+                if (current.find() && latest.find()) {
+                    for (int i=1; i<=3; i++) {
+                        if (Integer.parseInt(current.group(i)) != Integer.parseInt(latest.group(i))) return (Integer.parseInt(current.group(i)) < Integer.parseInt(latest.group(i))) ? i : -1;
                     }
                 }
                 else throw new IllegalArgumentException("Invalid semver");
