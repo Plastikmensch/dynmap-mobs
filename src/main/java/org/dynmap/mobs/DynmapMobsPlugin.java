@@ -182,11 +182,18 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                             }
                             break;
                         }
-                        // PigZombie is subclass of zombie
                         case "zombie": {
+                            // PigZombie is instance of zombie
                             MobData subData = get("zombifiedpiglin");
                             if (subData != null && subData.mobClass.isInstance(ent)) {
                                 key = "zombifiedpiglin";
+                                break;
+                            }
+
+                            // Drowned is instance of Zombie
+                            subData = get("drowned");
+                            if (subData != null && subData.mobClass.isInstance(ent)) {
+                                key = "drowned";
                             }
                             break;
                         }
@@ -493,6 +500,7 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                     case "villager": {
                         Villager v = (Villager)le;
                         Profession p = v.getProfession();
+                        // TODO(Optimization): Instead of switching and setting lbl, p could be converted to formatted String
                         switch (p) {
                             case NONE:
                                 lbl = "Villager";
@@ -540,8 +548,17 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                                 lbl = "Weaponsmith";
                                 break;
                             default:
-                                logger.severe("Missing Villager profession: " + p);
-                                lbl = "Unknown";
+                                // Legacy: Check removed professions
+                                switch (p.toString()) {
+                                    case "BLACKSMITH":
+                                        lbl = "Blacksmith";
+                                        break;
+                                    case "PRIEST":
+                                        lbl = "Priest";
+                                        break;
+                                    default:
+                                        logger.severe("Missing Villager profession: " + p);
+                                }
                         }
                         break;
                     }
