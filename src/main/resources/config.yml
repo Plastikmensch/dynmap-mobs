@@ -18,14 +18,17 @@ update:
   hideifshadow: 4
   # Make markers hidden when they are under cover (#=sky light level,0=underground,15=open to sky(disable hide))
   hideifundercover: 15
-  # Entitiy updates per tick (prevent lag spikes when large number of entities)
+  # Entity updates per tick (prevent lag spikes when large number of entities)
   updates-per-tick: 20
 
 # Enable or disable hostile mobs
 hostile:
   blaze: true
   cavespider: true
-  chickenjockey: true
+  chickenjockeydrowned: true
+  chickenjockeyhusk: true
+  chickenjockeyzombie: true
+  chickenjockeyzombievillager: true
   creeper: true
   drowned: true
   elderguardian: true
@@ -70,6 +73,7 @@ passive:
   bee: true
   cat: true
   chicken: true
+  chickenjockeyzombifiedpiglin: true
   cod: true
   cow: true
   dolphin: true

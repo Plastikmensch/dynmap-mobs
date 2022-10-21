@@ -156,20 +156,33 @@ public class DynmapMobsPlugin extends JavaPlugin implements IDynmapMobs {
                         case "chicken": {
                             List<Entity> passengers = ent.getPassengers();
                             if (!passengers.isEmpty()) {
-                                //TODO: Differentiate between jockeys
-                                key = "chickenjockey";
+                                Entity passenger = passengers.get(0);
+                                String passengerMobID = getMobID(passenger);
+
+                                logger.debug("Passenger is " + passenger.getType() + " mobID: " + passengerMobID);
+
+                                switch (passengerMobID) {
+                                    case "drowned":
+                                    case "husk":
+                                    case "zombie":
+                                    case "zombievillager":
+                                    case "zombifiedpiglin":
+                                        key = "chickenjockey" + passengerMobID;
+                                        logger.debug("Changed key to " + key);
+                                        break;
+                                    default:
+                                        logger.debug("Not supported jockey: " + passengerMobID);
+                                }
 
                                 // Create data for chickenjockey
                                 if (get(key) == null) {
                                     logger.debug("creating " + key);
 
                                     // Get category from passenger
-                                    //MobCategory category = get(getMobID(passengers.get(0))).mobCategory;
-                                    //debug("Category of passenger: " + category.asString());
+                                    MobCategory category = get(passengerMobID).mobCategory;
+                                    logger.debug("Category of passenger: " + category.asString());
 
-                                    // Default to hostile for now, since category is depending on the first chicken jockey found
-                                    //TODO: replace after differentiating jockeys
-                                    put(new MobData(key, null, MobCategory.HOSTILE, "Chicken Jockey"));
+                                    put(new MobData(key, null, category, "Chicken Jockey"));
                                 }
                             }
                             break;
