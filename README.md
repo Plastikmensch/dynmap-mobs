@@ -1,8 +1,7 @@
 # Dynmap-mobs
-Add-On for dynmap which shows mobs and vehicles on maps.
+Add-On for [Dynmap](https://github.com/webbukkit/dynmap) which shows mobs and vehicles on maps.
 
 ## Features
-- Legacy support for Mo' Creatures (has been discontinued since 1.12)
 - Separate layers for hostile and passive mobs and vehicles
 - Configurable
 - Automatic update checks

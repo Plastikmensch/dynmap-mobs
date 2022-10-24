@@ -4,59 +4,28 @@ general:
   # Whether to check for updates
   update-check: true
 
+# Toggle debug logs
+debug:
+  # Log everything. Warning: a lot
+  all: false
+
 update:
   # Seconds between position updates for mobs
   period: 5.0
-  # Seconds between position updates for vehicles
-  vehicleperiod: 10.0
   # Round position to given unit
   resolution: 1.0
   # Make markers hidden when they are inside/underground/in shadows (#=light level: 0=full shadow,15=sky(disable hide))
   hideifshadow: 4
   # Make markers hidden when they are under cover (#=sky light level,0=underground,15=open to sky(disable hide))
   hideifundercover: 15
-  # Mob updates per tick (prevent lag spikes when large number of mobs)
-  mobs-per-tick: 20
-  # Vehicle updates per tick (prevent lag spikes when large number of vehicles)
-  vehicles-per-tick: 20
+  # Entitiy updates per tick (prevent lag spikes when large number of entities)
+  updates-per-tick: 20
 
-mocreat_mobs:
-  bear: false
-  bigcat: false
-  bird: false
-  boar: false
-  bunny: false
-  caveogre: false
-  crocodile: false
-  deer: false
-  dolphin: false
-  duck: false
-  fireogre: false
-  fishy: false
-  flamewraith: false
-  fox: false
-  goat: false
-  hellrat: false
-  horse: false
-  jellyfish: false
-  kitty: false
-  mouse: false
-  ogre: false
-  ostrich: false
-  polarbear: false
-  rat: false
-  ray: false
-  scorpion: false
-  shark: false
-  snake: false
-  turtle: false
-  werewolf: false
-  wildwolf: false
-  wraith: false
-
-hostile_mobs:
+# Enable or disable hostile mobs
+hostile:
   blaze: true
   cavespider: true
+  chickenjockey: true
   creeper: true
   drowned: true
   elderguardian: true
@@ -73,6 +42,7 @@ hostile_mobs:
   magmacube: true
   phantom: true
   piglin: true
+  piglinbrute: true
   pillager: true
   ravager: true
   shulker: true
@@ -90,88 +60,76 @@ hostile_mobs:
   witherskeleton: true
   zoglin: true
   zombie: true
-  zombiepigman: true
   zombievillager: true
 
-passive_mobs:
+# Enable or disable passive mobs
+passive:
   allay: true
+  axolotl: true
   bat: true
+  bee: true
   cat: true
   chicken: true
-  chickenjockey: true
   cod: true
   cow: true
+  dolphin: true
   donkey: true
   frog: true
-  golem: true
+  fox: true
+  glowsquid: true
+  goat: true
+  horse: true
+  irongolem: true
   llama: true
-  mooshroom: true
   mule: true
+  mushroomcow: true
   ocelot: true
   panda: true
   parrot: true
   pig: true
+  polarbear: true
   pufferfish: true
   rabbit: true
   salmon: true
   sheep: true
   skeletonhorse: true
-  snowgolem: true
+  snowman: true
   squid: true
   strider: true
   tadpole: true
   tamedcat: true
   tameddonkey: true
+  tamedhorse: true
   tamedllama: true
   tamedmule: true
   tamedparrot: true
+  tamedskeletonhorse: true
   tamedtraderllama: true
-  tamedvanillahorse: true
   tamedwolf: true
   traderllama: true
   tropicalfish: true
-  vanilladolphin: true
-  vanillafox: true
-  vanillahorse: true
-  vanillapolarbear: true
-  vanillaturtle: true
+  turtle: true
   villager: true
-  wandering_trader: true
+  wanderingtrader: true
   wolf: true
   zombiehorse: true
-  bee: true
-  glowsquid: true
-  vanillagoat: true
-  axolotl: true
+  zombifiedpiglin: true
 
-vehicles:
+# Enable or disable vehicles
+vehicle:
   # Specific minecart types
-  command-minecart: false
-  explosive-minecart: false
-  hopper-minecart: false
-  powered-minecart: false
-  spawner-minecart: false
-  storage-minecart: false
   minecart: false
+  minecartchest: false
+  minecartcommand: false
+  minecartfurnace: false
+  minecarthopper: false
+  minecartmobspawner: false
+  minecarttnt: false
   # Boats
   boat: false
-  storage-boat: false
+  chestboat: false
   
-mocreatlayer:
-  name: "Mo'Creatures Mobs"
-  # Make mobs layer hidden by default
-  hidebydefault: false
-  # ordering priority in layer menu (low goes before high - default is 0)
-  layerprio: 10
-  # (optional) if true, use tiny marker icons (8x8) - default is 16x16
-  tinyicons: false
-  # (optional) if true, don't show labels on mob icons
-  nolabels: false
-  # (optional) set minimum zoom level when mob icons should be visible (0=default, any zoom)
-  minzoom: 0
-  # (optional) include coordinate in label for icon
-  inc-coord: false
-
+# Configure layer for hostile mobs
 hostilelayer:
   name: "Hostile Mobs"
   # Make mobs layer hidden by default
@@ -187,6 +145,7 @@ hostilelayer:
   # (optional) include coordinate in label for icon
   inc-coord: false
 
+# Configure layer for passive mobs
 passivelayer:
   name: "Passive Mobs"
   # Make mobs layer hidden by default
@@ -201,7 +160,8 @@ passivelayer:
   minzoom: 0
   # (optional) include coordinate in label for icon
   inc-coord: false
-  
+
+# Configure layer for vehicles
 vehiclelayer:
   name: "Vehicles"
   hidebydefault: false
