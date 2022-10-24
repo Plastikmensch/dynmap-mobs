@@ -29,10 +29,10 @@ jobs:
       run: mvn -Dchangelist=-dev package
     - uses: actions/upload-artifact@v3
       with:
-        name: dynmap-mobs-dev
+        name: dynmap-mobs-SNAPSHOT
         path: /home/runner/work/dynmap-mobs/dynmap-mobs/target/dynmap-mobs-*.jar
     # Use fork supporting release notes
-    - uses: "lauravuo/action-automatic-releases@test-changes"
+    - uses: "Plastikmensch/action-automatic-releases@fixed"
       # Don't create dev release on PR
       if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
       with:
